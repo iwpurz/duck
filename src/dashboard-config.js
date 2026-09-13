@@ -25,6 +25,24 @@ const AI_MODELS = Object.freeze([
     disclaimer: "OpenRouter selects an available free model. The model provider and its data policy can vary between requests.",
   },
   {
+    id: "meta-llama/llama-3.1-8b-instruct:free",
+    label: "Llama 3.1 8B Instruct",
+    tier: "free",
+    disclaimer: "Free endpoint availability and provider data policies can vary.",
+  },
+  {
+    id: "google/gemma-2-9b-it:free",
+    label: "Google Gemma 2 9B",
+    tier: "free",
+    disclaimer: "Free endpoint availability and provider data policies can vary.",
+  },
+  {
+    id: "qwen/qwen-2.5-7b-instruct:free",
+    label: "Qwen 2.5 7B Instruct",
+    tier: "free",
+    disclaimer: "Free endpoint availability and provider data policies can vary.",
+  },
+  {
     id: "tencent/hy3",
     label: "Tencent HY 3",
     tier: "plus",

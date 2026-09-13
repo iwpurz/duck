@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { getGuildSettings } from "./config.js";
 import { getAiModelDefinition, getPublicGuildSettings } from "./dashboard-config.js";
-import { ClusteredGuildScheduler, QueueCapacityError, fetchWithTimeoutAndRetry, readBoundedJson, readBoundedText } from "./runtime.js";
+import { ClusteredGuildScheduler, QueueCapacityError, describeProviderError, fetchWithTimeoutAndRetry, readBoundedJson, readBoundedText } from "./runtime.js";
 import { recordAiFlag } from "./community.js";
 import { getClusterManager } from "./clusters.js";
 import { getChildControl } from "./child-control.js";
@@ -73,8 +73,8 @@ async function requestSuggestion(content, { rules = "No server-specific rules we
         { role: "user", content: String(content).slice(0, 1_500) },
       ],
     }),
-  }, { timeoutMs: 12_000, attempts: 2, fetchImpl });
-  if (!response.ok) throw new Error(`AI scan provider returned HTTP ${response.status}: ${(await readBoundedText(response, 16 * 1024)).slice(0, 160)}`);
+  }, { timeoutMs: 12_000, attempts: 2, fetchImpl, maxResponseBytes: 256 * 1024, retryCloudflareChallenges: true });
+  if (!response.ok) throw new Error(`AI scan provider returned HTTP ${response.status}: ${describeProviderError(response, await readBoundedText(response, 256 * 1024))}`);
   const body = await readBoundedJson(response, 256 * 1024);
   return parseScanResult(body?.choices?.[0]?.message?.content);
 }

@@ -178,6 +178,23 @@ function isRetryableStatus(status) {
   return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
 }
 
+function isCloudflareChallenge(response, text = "") {
+  return response.status === 403 && (
+    response.headers?.get?.("cf-mitigated") === "challenge"
+    || (/^\s*(?:<!doctype html|<html)/i.test(text) && /<title>\s*Just a moment|cf-chl-|\/cdn-cgi\/challenge-platform/i.test(text))
+  );
+}
+
+function describeProviderError(response, text) {
+  if (isCloudflareChallenge(response, text)) return "The provider's Cloudflare protection temporarily blocked this request. Please try again shortly.";
+  if (/^\s*</.test(text)) return "The provider returned an unexpected HTML error page. Please try again shortly.";
+  try {
+    const body = JSON.parse(text);
+    if (typeof body?.error?.message === "string") return body.error.message.slice(0, 220);
+  } catch { /* Plain-text errors are also supported. */ }
+  return String(text).replace(/\s+/g, " ").trim().slice(0, 220);
+}
+
 async function fetchWithTimeoutAndRetry(url, options = {}, policy = {}) {
   const timeoutMs = Math.max(1_000, Number(policy.timeoutMs) || 30_000);
   const attempts = Math.max(1, Math.min(Number(policy.attempts) || 2, 5));
@@ -189,8 +206,15 @@ async function fetchWithTimeoutAndRetry(url, options = {}, policy = {}) {
     const timeout = setTimeout(() => controller.abort(new Error(`Request timed out after ${timeoutMs}ms.`)), timeoutMs);
     timeout.unref?.();
     try {
-      const response = await fetchImpl(url, { ...options, signal: controller.signal });
-      if (!isRetryableStatus(response.status) || attempt === attempts) return response;
+      let response = await fetchImpl(url, { ...options, signal: controller.signal });
+      let responseText = "";
+      // Keep the deadline active through the bounded body read when requested.
+      if (policy.maxResponseBytes && response.body) {
+        responseText = await readBoundedText(response, policy.maxResponseBytes);
+        response = new Response(responseText, { status: response.status, statusText: response.statusText, headers: response.headers });
+      }
+      const challenge = policy.retryCloudflareChallenges && isCloudflareChallenge(response, responseText);
+      if ((!isRetryableStatus(response.status) && !challenge) || attempt === attempts) return response;
       await response.body?.cancel?.().catch(() => {});
       const retryAfter = parseRetryAfterMs(response);
       await new Promise((resolve) => setTimeout(resolve, retryAfter ?? Math.min(250 * (2 ** (attempt - 1)), 2_000)));
@@ -259,6 +283,7 @@ export {
   ClusteredGuildScheduler,
   FairGuildScheduler,
   QueueCapacityError,
+  describeProviderError,
   fetchWithTimeoutAndRetry,
   isRetryableStatus,
   modelSupportsVision,

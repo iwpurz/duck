@@ -7,7 +7,7 @@ import { isDebugEnabled, shouldLogAiBodies, logInfo, logDebug, logWarn, logError
 import { pendingActions, pendingByChannel, pendingExpiryTimers, serverContextCache, messageHistoryCache, resourceFetchCache, pendingJsonWrites, voiceSessions, voiceQuarantineExpiryTimers, voiceQuarantineMoves, commandCooldowns, processedDiscordEvents, reminderTimers } from "./state.js";
 import { quotesPath, TOOL_DEFINITIONS, UTILITY_COMMANDS, DEFAULT_QUOTES, CURSES, BLESSINGS, EIGHT_BALL_ANSWERS, TOOL_REQUIREMENTS, DUCK_COLORS, COMMAND_PRESENTATION, RISK_COPY, CAPABILITY_MODES } from "./constants.js";
 import { packageInfo, buildInfo, loadJsonFile, saveJsonFile, flushJsonWrites, getMemberWarnings, addMemberWarning, clearMemberWarnings, getPendingActionTtlMs, getServerContextCacheTtlMs, getAiContextMemberLimit, getAiContextChannelLimit, getAiContextRoleLimit, getAiContextMessageChannelLimit, getAiContextMaxChars, getAiContextMessageChars, getAiContextFocusedMessages, getAiContextBackgroundMessages, getAiContextFetchConcurrency, getAiContextAttachmentLimit, isAiVisionEnabled, getAiVisionMaxImages, getAiVisionBatchSize, getAiVisionMaxAttachmentBytes, getAiVisionDetail, getMessageCacheTtlMs, getMessageCacheLimit, getCacheRefreshMs, getCacheRefreshChannelLimit, getCacheRefreshConcurrency, getEnvBoolean, supportsCurrentVoiceRuntime, getEnvId, getLegacyCommandContent, getEntryChannelConfig, getAiChatMaxTokens, getAiChatMaxAttempts, getAiRequestTimeoutMs, getAiHttpMaxAttempts, getCommandScope, shouldExcludeReasoning, savePendingActions, getActionRequestChannelId, schedulePendingExpiry, getGuildSettings, getGuildCapabilityMode, getCapabilityModeLabel, updateGuildSettings } from "./config.js";
-import { ClusteredGuildScheduler, QueueCapacityError, fetchWithTimeoutAndRetry, modelSupportsVision, readBoundedJson, readBoundedText } from "./runtime.js";
+import { ClusteredGuildScheduler, QueueCapacityError, describeProviderError, fetchWithTimeoutAndRetry, modelSupportsVision, readBoundedJson, readBoundedText } from "./runtime.js";
 import { createDuckWebsiteServer } from "./web.js";
 import { getAiModelDefinition, getDefaultAiModel, getFunCommandAccess, getPlusLoyalty, hasPlusEntitlement } from "./dashboard-config.js";
 import { getClusterManager } from "./clusters.js";
@@ -3789,6 +3789,8 @@ async function chatWithOpenAiCompatible(message, config) {
   }, {
     timeoutMs: getAiRequestTimeoutMs(),
     attempts: getAiHttpMaxAttempts(),
+    maxResponseBytes: 2 * 1024 * 1024,
+    retryCloudflareChallenges: isOpenRouterProvider(config.providerName),
   });
   };
 
@@ -3823,7 +3825,7 @@ async function chatWithOpenAiCompatible(message, config) {
     }
 
     if (!response.ok) {
-      const errorText = await readBoundedText(response, 64 * 1024);
+      const errorText = await readBoundedText(response, 2 * 1024 * 1024);
       if (allowTools && [400, 404, 422].includes(response.status) && /\b(tool|tools|tool_choice|function call|function calling)\b/i.test(errorText)) {
         logWarn("ai.chat.tools-unsupported", {
           providerName: config.providerName,
@@ -3840,9 +3842,9 @@ async function chatWithOpenAiCompatible(message, config) {
         attempts: maxAttempts,
         status: response.status,
         ms: elapsedMs(startedAt),
-        error: errorText.slice(0, 800),
+        error: describeProviderError(response, errorText),
       });
-      throw new AiServiceError(`${config.providerName} chat returned HTTP ${response.status}: ${errorText.slice(0, 220)}`, {
+      throw new AiServiceError(`${config.providerName} chat returned HTTP ${response.status}: ${describeProviderError(response, errorText)}`, {
         providerName: config.providerName,
         model: config.model,
         status: response.status,

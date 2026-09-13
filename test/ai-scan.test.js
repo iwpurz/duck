@@ -36,6 +36,28 @@ test("AI scanner rejects unapproved models and preserves selected-model privacy 
   assert.deepEqual(body.provider, { order: ["tencent"], allow_fallbacks: false, data_collection: "deny" });
 });
 
+test("AI scanner recovers from a Cloudflare challenge without changing the selected model", async () => {
+  let calls = 0;
+  const model = "qwen/qwen-2.5-7b-instruct:free";
+  const result = await requestSuggestion("inspect this message", { model, fetchImpl: async (_url, options) => {
+    assert.equal(JSON.parse(options.body).model, model);
+    calls += 1;
+    if (calls === 1) return new Response('<!DOCTYPE html><html><title>Just a moment...</title></html>', { status: 403 });
+    return Response.json({ choices: [{ message: { content: '{"flag":true,"category":"spam","confidence":0.8,"reason":"Repeated promotion."}' } }] });
+  } });
+  assert.equal(calls, 2);
+  assert.equal(result.category, "spam");
+});
+
+test("AI scanner reports an exhausted challenge without exposing HTML", async () => {
+  let calls = 0;
+  await assert.rejects(requestSuggestion("inspect this message", {
+    model: "google/gemma-2-9b-it:free",
+    fetchImpl: async () => { calls += 1; return new Response('<!DOCTYPE html><html><title>Just a moment...</title></html>', { status: 403 }); },
+  }), (error) => /Cloudflare/.test(error.message) && !/<html|<!DOCTYPE/.test(error.message));
+  assert.equal(calls, 2);
+});
+
 test("AI scanner reads recent and pinned rule embeds", async () => {
   const recentRule = { id: "recent", createdTimestamp: 2, content: "", embeds: [{ title: "General rules", fields: [{ name: "Rule 1", value: "No harassment" }] }] };
   const pinnedRule = { id: "pinned", createdTimestamp: 1, content: "", embeds: [{ description: "No advertising or scams", footer: { text: "Applies everywhere" } }] };

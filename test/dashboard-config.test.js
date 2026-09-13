@@ -15,6 +15,15 @@ test("dashboard settings allowlist fields and gate Plus models per guild", () =>
   assert.equal(makeSettingsPatch(plusSettings, { aiModel: "tencent/hy3" }).settings.aiModel, "tencent/hy3");
 });
 
+test("requested free models can be saved and survive public settings normalization", () => {
+  for (const id of ["meta-llama/llama-3.1-8b-instruct:free", "google/gemma-2-9b-it:free", "qwen/qwen-2.5-7b-instruct:free"]) {
+    assert.equal(getPublicModelCatalog().ai.find((model) => model.id === id)?.tier, "free");
+    const { settings } = makeSettingsPatch({}, { aiModel: id });
+    assert.equal(settings.aiModel, id);
+    assert.equal(getPublicGuildSettings(settings).aiModel, id);
+  }
+});
+
 test("expired Plus selections fall back to a free model", () => {
   const settings = getPublicGuildSettings({ aiModel: "tencent/hy3", subscription: { tier: "plus", status: "active", expiresAt: "2000-01-01T00:00:00.000Z" } });
   assert.equal(settings.subscription.tier, "free");

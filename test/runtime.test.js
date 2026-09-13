@@ -4,11 +4,54 @@ import {
   ClusteredGuildScheduler,
   FairGuildScheduler,
   QueueCapacityError,
+  describeProviderError,
   fetchWithTimeoutAndRetry,
   modelSupportsVision,
   readBoundedJson,
   readBoundedText,
 } from "../src/runtime.js";
+
+const challengeHtml = '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>';
+
+test("Cloudflare HTML challenges retry with a bounded budget and readable final errors", async () => {
+  let calls = 0;
+  const policy = { attempts: 2, maxResponseBytes: 4096, retryCloudflareChallenges: true,
+    fetchImpl: async () => ++calls === 1 ? new Response(challengeHtml, { status: 403 }) : Response.json({ ok: true }) };
+  assert.deepEqual(await (await fetchWithTimeoutAndRetry("https://example.invalid", {}, policy)).json(), { ok: true });
+  assert.equal(calls, 2);
+  calls = 0;
+  policy.fetchImpl = async () => { calls += 1; return new Response(challengeHtml, { status: 403 }); };
+  const response = await fetchWithTimeoutAndRetry("https://example.invalid", {}, policy);
+  const error = describeProviderError(response, await response.text());
+  assert.equal(calls, 2);
+  assert.match(error, /Cloudflare/);
+  assert.doesNotMatch(error, /<html|<!DOCTYPE/);
+});
+
+test("permission and moderation 403s are not retried, and challenges require opt-in", async () => {
+  for (const [body, enabled] of [[JSON.stringify({ error: { message: "Request blocked by moderation" } }), true], [challengeHtml, false]]) {
+    let calls = 0;
+    const response = await fetchWithTimeoutAndRetry("https://example.invalid", {}, {
+      attempts: 3, maxResponseBytes: 4096, retryCloudflareChallenges: enabled,
+      fetchImpl: async () => { calls += 1; return new Response(body, { status: 403 }); },
+    });
+    assert.equal(calls, 1);
+    assert.equal(await response.text(), body);
+  }
+});
+
+test("buffered requests time out when headers arrive but the body stalls", async () => {
+  let aborted = false;
+  await assert.rejects(fetchWithTimeoutAndRetry("https://example.invalid", {}, {
+    timeoutMs: 1000, attempts: 1, maxResponseBytes: 4096,
+    fetchImpl: async (_url, { signal }) => new Response(new ReadableStream({
+      start(controller) {
+        signal.addEventListener("abort", () => { aborted = true; controller.error(signal.reason); }, { once: true });
+      },
+    })),
+  }), /timed out/);
+  assert.equal(aborted, true);
+});
 
 test("cluster queues isolate batches while preserving per-server serialization", async () => {
   const scheduler = new ClusteredGuildScheduler({ resolveClusterId: (guildId) => guildId.startsWith("a") ? "cluster-01" : "cluster-02", clusterCount: 2, globalConcurrency: 2, guildConcurrency: 1, maxQueuedPerGuild: 2, maxQueuedGlobal: 4 });
