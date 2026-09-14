@@ -4,7 +4,7 @@ import { HELPER_TOOLS, VOTE_URL, USER_INSTALL_URL, claimHelperQuota, attachmentM
 import { PERSONALITIES, personalityPrompt } from "./personality.js";
 import { getGuildSettings } from "./config.js";
 import { getDefaultAiModel, getPublicGuildSettings } from "./dashboard-config.js";
-import { describeProviderError, fetchWithTimeoutAndRetry, readBoundedText } from "./runtime.js";
+import { describeProviderError, fetchWithTimeoutAndRetry, getOpenRouterChatApiKey, getOpenRouterChatEndpoint, readBoundedText } from "./runtime.js";
 
 const PERSONAL_COMMAND_NAMES = new Set(["vote", "install", "helper"]);
 let activePersonalChats = 0;
@@ -33,7 +33,7 @@ function buildPersonalCommands() {
 }
 
 async function personalAnswer(prompt, preset, context, fetchImpl) {
-  const key = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
+  const key = getOpenRouterChatApiKey();
   if (!key) throw new Error("Duck's AI provider is not configured. The other helper commands still work.");
   if (activePersonalChats >= 2) throw new Error("Duck's personal assistant is busy. Try again shortly.");
   claimHelperQuota(context.userId, context.guildId);
@@ -46,7 +46,7 @@ async function personalAnswer(prompt, preset, context, fetchImpl) {
     const availableTools = HELPER_TOOLS.filter((tool) => tool.function.name === "calculate" || (context.webEnabled && ["search_web", "read_web_page"].includes(tool.function.name)));
     let toolsSupported = true;
     for (let step = 0; step < 3; step += 1) {
-      const response = await fetchWithTimeoutAndRetry("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetchWithTimeoutAndRetry(getOpenRouterChatEndpoint(), {
         method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "X-OpenRouter-Title": "Duck personal assistant" },
         body: JSON.stringify({ model: getDefaultAiModel(), max_tokens: 650, messages, ...(toolsSupported && step < 2 ? { tools: availableTools, tool_choice: "auto" } : {}) }),
       }, { attempts: 2, timeoutMs: 15000, maxResponseBytes: 256 * 1024, retryCloudflareChallenges: true, fetchImpl });

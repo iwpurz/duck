@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { getGuildSettings } from "./config.js";
 import { getAiModelDefinition, getPublicGuildSettings } from "./dashboard-config.js";
-import { ClusteredGuildScheduler, QueueCapacityError, describeProviderError, fetchWithTimeoutAndRetry, readBoundedJson, readBoundedText } from "./runtime.js";
+import { ClusteredGuildScheduler, QueueCapacityError, describeProviderError, fetchWithTimeoutAndRetry, getOpenRouterChatApiKey, getOpenRouterChatEndpoint, readBoundedJson, readBoundedText } from "./runtime.js";
 import { recordAiFlag } from "./community.js";
 import { getClusterManager } from "./clusters.js";
 import { getChildControl } from "./child-control.js";
@@ -55,10 +55,10 @@ async function requestSuggestion(content, { rules = "No server-specific rules we
       if (delegated?.content) return parseScanResult(delegated.content);
     } catch { /* The manager remains the reliable fallback. */ }
   }
-  const response = await fetchWithTimeoutAndRetry("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await fetchWithTimeoutAndRetry(getOpenRouterChatEndpoint(), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${getOpenRouterChatApiKey()}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://duck.wispbyte.app",
       "X-OpenRouter-Title": `${process.env.OPENROUTER_APP_NAME || "Duck Discord Bot"} advisory scanner`,
