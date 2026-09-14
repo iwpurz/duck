@@ -39,14 +39,13 @@ test("both natural-language moderation paths enforce requester hierarchy", () =>
   assert.ok(matches.length >= 2, `expected at least two hierarchy checks, found ${matches.length}`);
 });
 
-test("command registration has a single configured scope", () => {
-  const start = coreSource.indexOf("async function registerCommands");
-  const end = coreSource.indexOf("\nfunction validateSlashCommandDispatchers", start);
-  const implementation = coreSource.slice(start, end);
-
-  assert.match(implementation, /getCommandScope\(\)/);
-  assert.match(implementation, /scope === "global" \? body : \[\]/);
-  assert.match(implementation, /scope === "guild" \? body : \[\]/);
+test("personal commands are global-capable while server commands stay guild-only", async () => {
+  const commands = await registerCommands(null, { dryRun: true });
+  for (const command of commands) {
+    const personal = ["helper", "vote", "install"].includes(command.name);
+    assert.deepEqual(command.integration_types, personal ? [0, 1] : [0]);
+    assert.deepEqual(command.contexts, personal ? [0, 1, 2] : [0]);
+  }
 });
 
 test("channel lock correctly requires Manage Roles", async () => {

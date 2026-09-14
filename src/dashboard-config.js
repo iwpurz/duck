@@ -1,3 +1,4 @@
+import { PERSONALITIES } from "./personality.js";
 function freezeModelDefinition(model) {
   const providerRouting = model.providerRouting
     ? Object.freeze({ ...model.providerRouting, ...(model.providerRouting.order ? { order: Object.freeze([...model.providerRouting.order]) } : {}) })
@@ -223,6 +224,8 @@ function getPublicGuildSettings(settings = {}, configuredModel = "", now = Date.
     aiContextMode: AI_CONTEXT_MODES.has(settings.aiContextMode) ? settings.aiContextMode : "server",
     aiResponseStyle: AI_RESPONSE_STYLES.has(settings.aiResponseStyle) ? settings.aiResponseStyle : "balanced",
     aiChannelMode: AI_CHANNEL_MODES.has(settings.aiChannelMode) ? settings.aiChannelMode : "moderation",
+    aiPersonalityPreset: Object.hasOwn(PERSONALITIES, settings.aiPersonalityPreset) ? settings.aiPersonalityPreset : "classic",
+    aiWebEnabled: settings.aiWebEnabled === true,
     aiPersonality: plus && typeof settings.aiPersonality === "string" ? settings.aiPersonality : "",
     ttsEnabled: settings.ttsEnabled !== false,
     ttsModel,
@@ -322,11 +325,11 @@ function getPublicGuildSettings(settings = {}, configuredModel = "", now = Date.
 
 function makeSettingsPatch(current, input, configuredModel = "", now = Date.now()) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new TypeError("Settings must be a JSON object.");
-  const allowed = new Set(["aiChatEnabled", "aiModel", "aiVisionEnabled", "aiContextMode", "aiResponseStyle", "aiChannelMode", "aiPersonality", "aiScanEnabled", "aiScanChannelIds", "aiScanFlagChannelId", "aiScanRulesChannelId", "aiScanSensitivity", "reactionRolesEnabled", "reactionRoleChannelId", "reactionRoleTitle", "reactionRoleMode", "reactionRoleLimit", "reactionRoleOptions", "ticketsEnabled", "ticketPanelChannelId", "ticketCategoryId", "ticketSupportRoleId", "ticketAdminRoleId", "ticketPanelTitle", "ticketOptions", "ticketTranscriptsEnabled", "autorolesEnabled", "autoroleRoleIds", "levelsEnabled", "levelAnnouncementChannelId", "levelIgnoredChannelIds", "levelRewards", "suggestionsEnabled", "suggestionChannelId", "suggestionAnonymousEnabled", "starboardEnabled", "starboardChannelId", "starboardThreshold", "starboardEmoji", "starboardColor", "starboardAllowNsfw", "scheduledPosts", "colorRolesEnabled", "colorRoleChannelId", "colorRoleRequiredRoleId", "colorRoleTitle", "colorRoleDescription", "colorRoleAccent", "colorRoleAllowRemove", "colorRoleRandomOnJoin", "colorRoleOptions", "ttsEnabled", "ttsModel", "ttsAnnounceNames", "capabilityMode", "commandPrefix", "modChannelId", "welcomeChannelId", "welcomeMessage", "farewellMessage", "logChannelId", "funCommandsEnabled", "automodEnabled", "automodHoneypotEnabled", "automodHoneypotChannelId", "automodSwearFilter", "automodNsfwFilter", "automodInviteFilter", "automodCapsFilter", "automodLinkFilter", "automodRepeatedTextFilter", "automodDangerousFileFilter", "automodZalgoFilter", "automodMentionLimit", "automodEmojiLimit", "automodLineLimit", "automodCustomWords", "automodViolationsBeforeWarn", "automodWarningsBeforeAction", "automodEscalation", "automodGlobalSlowmodeSeconds", "automodChannelSlowmodes", "customActions", ...FUN_COMMANDS.map(({ key }) => key)]);
+  const allowed = new Set(["aiPersonalityPreset", "aiWebEnabled", "aiChatEnabled", "aiModel", "aiVisionEnabled", "aiContextMode", "aiResponseStyle", "aiChannelMode", "aiPersonality", "aiScanEnabled", "aiScanChannelIds", "aiScanFlagChannelId", "aiScanRulesChannelId", "aiScanSensitivity", "reactionRolesEnabled", "reactionRoleChannelId", "reactionRoleTitle", "reactionRoleMode", "reactionRoleLimit", "reactionRoleOptions", "ticketsEnabled", "ticketPanelChannelId", "ticketCategoryId", "ticketSupportRoleId", "ticketAdminRoleId", "ticketPanelTitle", "ticketOptions", "ticketTranscriptsEnabled", "autorolesEnabled", "autoroleRoleIds", "levelsEnabled", "levelAnnouncementChannelId", "levelIgnoredChannelIds", "levelRewards", "suggestionsEnabled", "suggestionChannelId", "suggestionAnonymousEnabled", "starboardEnabled", "starboardChannelId", "starboardThreshold", "starboardEmoji", "starboardColor", "starboardAllowNsfw", "scheduledPosts", "colorRolesEnabled", "colorRoleChannelId", "colorRoleRequiredRoleId", "colorRoleTitle", "colorRoleDescription", "colorRoleAccent", "colorRoleAllowRemove", "colorRoleRandomOnJoin", "colorRoleOptions", "ttsEnabled", "ttsModel", "ttsAnnounceNames", "capabilityMode", "commandPrefix", "modChannelId", "welcomeChannelId", "welcomeMessage", "farewellMessage", "logChannelId", "funCommandsEnabled", "automodEnabled", "automodHoneypotEnabled", "automodHoneypotChannelId", "automodSwearFilter", "automodNsfwFilter", "automodInviteFilter", "automodCapsFilter", "automodLinkFilter", "automodRepeatedTextFilter", "automodDangerousFileFilter", "automodZalgoFilter", "automodMentionLimit", "automodEmojiLimit", "automodLineLimit", "automodCustomWords", "automodViolationsBeforeWarn", "automodWarningsBeforeAction", "automodEscalation", "automodGlobalSlowmodeSeconds", "automodChannelSlowmodes", "customActions", ...FUN_COMMANDS.map(({ key }) => key)]);
   if (Object.keys(input).some((key) => !allowed.has(key))) throw new TypeError("Unknown setting.");
   const patch = {};
   const plus = hasPlusEntitlement(current, now);
-  for (const key of ["aiChatEnabled", "aiVisionEnabled", "aiScanEnabled", "reactionRolesEnabled", "ticketsEnabled", "ticketTranscriptsEnabled", "autorolesEnabled", "levelsEnabled", "suggestionsEnabled", "suggestionAnonymousEnabled", "starboardEnabled", "starboardAllowNsfw", "colorRolesEnabled", "colorRoleAllowRemove", "colorRoleRandomOnJoin", "ttsEnabled", "ttsAnnounceNames", "funCommandsEnabled", "automodEnabled", "automodHoneypotEnabled", "automodSwearFilter", "automodNsfwFilter", "automodInviteFilter", "automodCapsFilter", "automodLinkFilter", "automodRepeatedTextFilter", "automodDangerousFileFilter", "automodZalgoFilter", ...FUN_COMMANDS.map(({ key }) => key)]) {
+  for (const key of ["aiWebEnabled", "aiChatEnabled", "aiVisionEnabled", "aiScanEnabled", "reactionRolesEnabled", "ticketsEnabled", "ticketTranscriptsEnabled", "autorolesEnabled", "levelsEnabled", "suggestionsEnabled", "suggestionAnonymousEnabled", "starboardEnabled", "starboardAllowNsfw", "colorRolesEnabled", "colorRoleAllowRemove", "colorRoleRandomOnJoin", "ttsEnabled", "ttsAnnounceNames", "funCommandsEnabled", "automodEnabled", "automodHoneypotEnabled", "automodSwearFilter", "automodNsfwFilter", "automodInviteFilter", "automodCapsFilter", "automodLinkFilter", "automodRepeatedTextFilter", "automodDangerousFileFilter", "automodZalgoFilter", ...FUN_COMMANDS.map(({ key }) => key)]) {
     if (key in input) {
       if (typeof input[key] !== "boolean") throw new TypeError(`${key} must be true or false.`);
       patch[key] = input[key];
@@ -448,6 +451,10 @@ function makeSettingsPatch(current, input, configuredModel = "", now = Date.now(
   if ("aiChannelMode" in input) {
     if (!AI_CHANNEL_MODES.has(input.aiChannelMode)) throw new TypeError("Unsupported AI channel mode.");
     patch.aiChannelMode = input.aiChannelMode;
+  }
+  if ("aiPersonalityPreset" in input) {
+    if (typeof input.aiPersonalityPreset !== "string" || !Object.hasOwn(PERSONALITIES, input.aiPersonalityPreset)) throw new TypeError("Choose a supported personality preset.");
+    patch.aiPersonalityPreset = input.aiPersonalityPreset;
   }
   if ("aiPersonality" in input) {
     if (!hasPlusEntitlement(current, now)) {

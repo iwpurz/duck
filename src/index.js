@@ -1,3 +1,4 @@
+import { handlePersonalCommand } from "./personal-app.js";
 import { Events, ActivityType, MessageFlags, PermissionsBitField } from "discord.js";
 import { client } from "./client.js";
 import { logInfo, logDebug, logWarn, logError, elapsedMs, splitDiscordLines } from "./logging.js";
@@ -139,6 +140,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!claimDiscordEvent(`interaction:${interaction.id}`)) return;
     if (isPlatformBlocked(interaction.user?.id)) { if (interaction.isRepliable()) await interaction.reply({ content: "You cannot use Duck right now. Contact Duck's operator if you believe this is a mistake.", flags: MessageFlags.Ephemeral }).catch(() => null); return; }
     if (interaction.isChatInputCommand()) {
+      if (await handlePersonalCommand(interaction) !== false) return;
+      if (!interaction.guild) return interaction.reply({ content: "This command needs a server installation. Use /helper for personal tools.", flags: MessageFlags.Ephemeral });
       const colorResult = await handleColorCommand(interaction);
       if (colorResult !== false) return;
       const studioResult = await handleCommunitySlashCommand(interaction);
@@ -444,11 +447,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
-    await handleMemberJoin(member);
+    await handleMemberJoin(member).catch((err) => logError("member-join.welcome-failed", err, { guildId: member.guild.id }));
     await applyAutoroles(member);
-    await applyRandomJoinColor(member);
+    if (!member.pending) await applyRandomJoinColor(member);
   } catch (err) {
     logError("member-join.failed", err, { guildId: member.guild.id, memberId: member.id });
+  }
+});
+
+client.on(Events.GuildMemberUpdate, async (before, member) => {
+  if (before.pending === true && member.pending === false) {
+    try { await applyAutoroles(member); await applyRandomJoinColor(member); }
+    catch (err) { logError("member-screening.roles-failed", err, { guildId: member.guild.id, memberId: member.id }); }
   }
 });
 

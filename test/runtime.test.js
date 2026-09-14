@@ -28,6 +28,16 @@ test("Cloudflare HTML challenges retry with a bounded budget and readable final 
   assert.doesNotMatch(error, /<html|<!DOCTYPE/);
 });
 
+test("persistent challenges include a safe support reference without leaking the HTML page", () => {
+  const response = new Response(challengeHtml, { status: 403, headers: { "cf-ray": "0123456789abcdef-LAX" } });
+  const error = describeProviderError(response, challengeHtml);
+  assert.match(error, /OpenRouter support/);
+  assert.match(error, /0123456789abcdef-LAX/);
+  assert.doesNotMatch(error, /temporarily|<html|<!DOCTYPE/);
+  const malformed = new Response(challengeHtml, { status: 403, headers: { "cf-ray": "<untrusted>" } });
+  assert.doesNotMatch(describeProviderError(malformed, challengeHtml), /<untrusted>/);
+});
+
 test("permission and moderation 403s are not retried, and challenges require opt-in", async () => {
   for (const [body, enabled] of [[JSON.stringify({ error: { message: "Request blocked by moderation" } }), true], [challengeHtml, false]]) {
     let calls = 0;

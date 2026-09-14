@@ -1,0 +1,88 @@
+{
+  "documentType": "codex-security.scan-manifest",
+  "scan": {
+    "artifacts": [
+      {
+        "mediaType": "application/json",
+        "path": "findings.json",
+        "sha256": "10474c5e35c8bf7afbbe7add4306304e56e76fa8db50668342a2660e2dd3c4c5"
+      },
+      {
+        "mediaType": "application/json",
+        "path": "coverage.json",
+        "sha256": "38763fab7cf4f99dd47e583dd3e4aecdcf2f28b15a609c54f74c3beead40cf62"
+      }
+    ],
+    "completedAt": "2026-08-14T05:27:47Z",
+    "coverageRef": "coverage.json",
+    "findingsRef": "findings.json",
+    "id": "duck-website-20260813",
+    "producer": {
+      "name": "codex-security-plugin",
+      "version": "0.1.19"
+    },
+    "scope": {
+      "excludePaths": [],
+      "includePaths": [
+        "src/web.js",
+        "src/dashboard-config.js",
+        "public/",
+        "src/core.js",
+        ".env.template",
+        "config.example.json",
+        "README.md",
+        "test/web.test.js",
+        "test/dashboard-config.test.js"
+      ],
+      "summary": "Internet-facing website, Discord OAuth, guild authorization, settings, model entitlements, billing webhook, and direct bot integration points."
+    },
+    "sealedAt": "2026-08-14T05:27:47Z",
+    "startedAt": "2026-08-14T05:00:00Z",
+    "status": "completed",
+    "target": {
+      "displayName": "Duck website and dashboard",
+      "kind": "git_worktree",
+      "revision": "14bc3db",
+      "snapshotDigest": "codex-security-snapshot/v1:sha256:c68f580f9f1e7fd750027b09d86e5b777bb1deca1284a88f463c406e5a0ddb7e",
+      "targetId": "duck-website-current-worktree"
+    },
+    "threatModel": {
+      "assets": [
+        "Discord OAuth and refresh tokens",
+        "dashboard sessions",
+        "per-guild settings",
+        "Plus entitlements",
+        "AI and TTS API credentials",
+        "website availability"
+      ],
+      "assumptions": [
+        "TLS terminates correctly for duck.wispbyte.org",
+        "Discord and configured provider endpoints are trusted",
+        "billing adapters keep the webhook secret confidential"
+      ],
+      "attackerCapabilities": [
+        "send unauthenticated HTTP requests",
+        "authenticate as a Discord user",
+        "control Discord guild names and normal dashboard input",
+        "replay an observed webhook delivery without learning its signing secret"
+      ],
+      "securityObjectives": [
+        "keep tokens and secrets server-side",
+        "authorize every mutation against current Discord permissions",
+        "isolate guild settings",
+        "prevent user-controlled Plus grants",
+        "reject stale or replayed billing state",
+        "bound attacker-controlled resource use"
+      ],
+      "summary": "A public internet attacker or authenticated Discord user may attempt to steal sessions, cross guild boundaries, alter settings or entitlements, inject browser content, replay webhooks, or exhaust the service.",
+      "trustBoundaries": [
+        "browser to Duck HTTP server",
+        "Duck to Discord OAuth API",
+        "billing adapter to signed webhook",
+        "dashboard to guild settings persistence",
+        "bot runtime to AI and TTS providers"
+      ]
+    }
+  },
+  "schemaVersion": "1.0"
+}

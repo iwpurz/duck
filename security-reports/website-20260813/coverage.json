@@ -1,0 +1,72 @@
+{
+  "completeness": "complete",
+  "deferred": [],
+  "documentType": "codex-security.coverage",
+  "excludePaths": [],
+  "explicitExclusions": [],
+  "includePaths": [
+    "src/web.js",
+    "src/dashboard-config.js",
+    "public/",
+    "src/core.js",
+    ".env.template",
+    "config.example.json",
+    "README.md",
+    "test/web.test.js",
+    "test/dashboard-config.test.js"
+  ],
+  "inventoryStrategy": "scoped_path",
+  "mode": "scoped_path",
+  "scanId": "duck-website-20260813",
+  "schemaVersion": "1.0",
+  "surfaces": [
+    {
+      "disposition": "no_issue_found",
+      "id": "discord_oauth_sessions",
+      "label": "Discord OAuth and session lifecycle",
+      "notes": "State is stateless and HMAC-authenticated, cookies are HttpOnly SameSite and Secure in production, tokens remain server-side, and sessions expire.",
+      "receiptRefs": [],
+      "riskArea": "authentication"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "guild_authorization",
+      "label": "Guild membership, permissions, and settings isolation",
+      "notes": "Mutations refresh Discord guild permissions; Manage Server controls normal configuration while Administrator-only policy fields receive a separate check. Duck presence is required.",
+      "receiptRefs": [],
+      "riskArea": "authorization"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "browser_security",
+      "label": "Dashboard DOM rendering and browser security headers",
+      "notes": "Discord strings are rendered through textContent, CSP is restrictive, external images are limited to Discord CDN, and state changes require a session-bound CSRF token.",
+      "receiptRefs": [],
+      "riskArea": "cross-site-scripting"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "billing_entitlements",
+      "label": "Plus checkout and billing webhook",
+      "notes": "The browser cannot write subscription fields. HMAC signatures, fresh timestamps, persisted event ordering, and validated HTTPS checkout URLs protect entitlement state.",
+      "receiptRefs": [],
+      "riskArea": "business-logic"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "resource_limits",
+      "label": "HTTP request and in-memory resource limits",
+      "notes": "Request bodies, sessions, request rates, sockets, and security-sensitive maps are bounded. Static assets are precompressed and cached.",
+      "receiptRefs": [],
+      "riskArea": "denial-of-service"
+    },
+    {
+      "disposition": "no_issue_found",
+      "id": "provider_integration",
+      "label": "Per-guild AI and TTS model integration",
+      "notes": "Plus is rechecked at runtime, Tencent is text-only, provider routing is server-controlled, and TTS responses are deadline and size bounded.",
+      "receiptRefs": [],
+      "riskArea": "data-handling"
+    }
+  ]
+}

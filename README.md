@@ -454,3 +454,13 @@ Set `DUCK_DEBUG_AI_BODY=true` only when needed. It logs short AI response snippe
 - `unlock #general`
 
 Timeout duration supports `s`, `m`, `h`, and `d`. Slowmode supports `s`, `m`, and `h`.
+
+## Top.gg, personal installs, and helper tools
+
+- Support Duck with /vote or the website vote buttons: https://top.gg/bot/1507850959642955816/vote. No automatic reminders, vote tracking, or voting requirement.
+- **Before deploying user-install commands:** open Discord Developer Portal > Duck > Installation, enable **User Install** alongside Guild Install, and set the User Install scope to **applications.commands**. Keep the bot scope and server permissions under Guild Install only. Restart Duck to register the commands. Test /helper in a DM and a server where Duck is not installed. Personal installation link: https://discord.com/oauth2/authorize?client_id=1507850959642955816&integration_type=1&scope=applications.commands
+- /helper ask is a private, stateless AI conversation using only the supplied prompt. /helper calculate, search, read, image, and metadata also work through a personal install. Moderation commands remain server-install-only. AI availability still depends on OpenRouter.
+- Dashboard > AI: five free personality presets; Plus retains custom personality text. Restricted internet helpers are off by default in servers. Enable explicitly to allow Wikipedia search and HTTPS reading on Wikipedia, MDN, Discord docs, and Google Help. No arbitrary sites, redirects, cookies, credentials, page scripts, or downloads. Limits: 5 requests/user/minute, 20/server/minute, 60/process/minute, four simultaneous readers, 8-second deadlines, and 512 KiB per response. These process-local limits also cover AI-issued web tools; multiple bot processes have separate budgets.
+- AI helpers can calculate, inspect metadata for a current attachment, and make a Google Lens link. Opening the link shares the image URL with Google. Duck does not scrape Google search results. /helper metadata exports Discord attachment fields, not embedded EXIF/GPS or file bytes.
+- Automatic roles are under Dashboard > Automatic roles. Human members receive safe configured roles after Discord membership screening; Duck requires Manage Roles and a higher role. Free supports one role; Plus supports five.
+- The homepage embeds the official Discord widget. Enable Server Settings > Widget on server 1537659575027638292 if Discord reports the widget is unavailable.

@@ -1,3 +1,4 @@
+import { HELPER_TOOLS } from "../src/helper-tools.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -79,7 +80,7 @@ test("AI action tools expose every supported action exactly once", () => {
   assert.equal(new Set(groupedActions).size, groupedActions.length);
   assert.deepEqual([...groupedActions].sort(), TOOL_DEFINITIONS.map((tool) => tool.name).sort());
   assert.equal(AI_ACTION_TOOL_DEFINITIONS.length, 5);
-  assert.equal(AI_TOOL_DEFINITIONS.length, AI_READ_TOOL_DEFINITIONS.length + AI_ACTION_TOOL_DEFINITIONS.length);
+  assert.equal(AI_TOOL_DEFINITIONS.length, AI_READ_TOOL_DEFINITIONS.length + AI_ACTION_TOOL_DEFINITIONS.length + HELPER_TOOLS.length);
   for (const definition of AI_ACTION_TOOL_DEFINITIONS) {
     assert.equal(definition.type, "function");
     assert.equal(definition.function.parameters.additionalProperties, false);

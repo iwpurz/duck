@@ -186,7 +186,11 @@ function isCloudflareChallenge(response, text = "") {
 }
 
 function describeProviderError(response, text) {
-  if (isCloudflareChallenge(response, text)) return "The provider's Cloudflare protection temporarily blocked this request. Please try again shortly.";
+  if (isCloudflareChallenge(response, text)) {
+    const rayId = response.headers?.get?.("cf-ray") || "";
+    const reference = /^[a-f0-9]{16,32}(?:-[a-z]{3})?$/i.test(rayId) ? ` Cloudflare Ray ID: ${rayId}.` : "";
+    return `The provider's Cloudflare protection blocked this API request. If this persists, the bot operator should contact OpenRouter support with the failure time and hosting details.${reference}`;
+  }
   if (/^\s*</.test(text)) return "The provider returned an unexpected HTML error page. Please try again shortly.";
   try {
     const body = JSON.parse(text);

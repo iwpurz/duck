@@ -18,7 +18,7 @@ function safeProfiles(settings) {
 }
 
 async function applyAutoroles(member) {
-  if (!member?.guild || member.user?.bot) return;
+  if (!member?.guild || member.user?.bot || member.pending) return;
   const settings = getPublicGuildSettings(getGuildSettings(member.guild.id));
   if (!settings.autorolesEnabled) return;
   let applied = 0;

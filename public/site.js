@@ -47,6 +47,39 @@ function installThemeControls() {
 
 installThemeControls();
 
+// Header and announcement heights vary with viewport, theme, and translated text.
+// Keep fixed dashboard panels below the actual visible chrome, not a 70px guess.
+const chromeHeader = document.querySelector(".site-header");
+let chromeFrame = 0;
+const measureChrome = () => {
+  chromeFrame = 0;
+  const banner = document.querySelector(".website-banner");
+  const bannerHeight = Math.ceil(banner?.getBoundingClientRect().height || 0);
+  const headerHeight = Math.ceil(chromeHeader?.getBoundingClientRect().height || 0);
+  document.documentElement.style.setProperty("--banner-height", `${bannerHeight}px`);
+  document.documentElement.style.setProperty("--header-height", `${headerHeight}px`);
+  document.documentElement.style.setProperty("--chrome-height", `${bannerHeight + headerHeight}px`);
+};
+const scheduleChromeMeasure = () => { if (!chromeFrame) chromeFrame = requestAnimationFrame(measureChrome); };
+const chromeObserver = new ResizeObserver(scheduleChromeMeasure);
+if (chromeHeader) chromeObserver.observe(chromeHeader);
+new MutationObserver(() => {
+  const banner = document.querySelector(".website-banner");
+  if (banner) chromeObserver.observe(banner);
+  scheduleChromeMeasure();
+}).observe(document.body, { childList: true, attributes: true, attributeFilter: ["class"] });
+window.addEventListener("resize", scheduleChromeMeasure);
+scheduleChromeMeasure();
+
+for (const footer of document.querySelectorAll(".footer-links")) {
+  const vote = document.createElement("a");
+  vote.href = "https://top.gg/bot/1507850959642955816/vote";
+  vote.textContent = "Vote for Duck ↗";
+  vote.target = "_blank";
+  vote.rel = "noopener noreferrer";
+  footer.append(vote);
+}
+
 runWhenIdle(() => {
   fetch("/api/site-config")
     .then((response) => response.ok ? response.json() : Promise.reject(new Error("Site configuration unavailable")))
