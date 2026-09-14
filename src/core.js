@@ -1,3 +1,4 @@
+import { statusTitle } from "./status-emojis.js";
 import { HELPER_TOOLS, executeHelperTool, VOTE_URL } from "./helper-tools.js";
 import { personalityPrompt } from "./personality.js";
 import { PERSONAL_COMMAND_NAMES, buildPersonalCommands } from "./personal-app.js";
@@ -7146,7 +7147,7 @@ function makeCommandResponseEmbed(message, content, options = {}) {
 
 function makeDuckChatEmbed(message, content, options = {}) {
   const embed = new EmbedBuilder()
-    .setTitle(options.title || "Duck")
+    .setTitle(statusTitle(options.title || "Duck", options.status))
     .setDescription(limitDiscordContent(content, 4000))
     .setColor(options.color || DUCK_COLORS.brand)
     .setTimestamp();

@@ -1,3 +1,4 @@
+import { statusPayload } from "./status-emojis.js";
 import { handlePersonalCommand } from "./personal-app.js";
 import { Events, ActivityType, MessageFlags, PermissionsBitField } from "discord.js";
 import { client } from "./client.js";
@@ -159,12 +160,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         };
         if (!matchers[type]) return interaction.reply({ content: "Choose a supported cleanup type.", flags: MessageFlags.Ephemeral });
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const recent = await interaction.channel.messages.fetch({ limit: 100 });
         const matches = recent.filter((item) => !item.pinned && matchers[type](item)).first(count);
         const removed = matches.length ? await interaction.channel.bulkDelete(matches, true) : null;
         const removedCount = removed?.size || 0;
         await recordAuditEvent(interaction.guild, { userId: interaction.user.id, action: `Cleaned ${type} messages`, reason: `${removedCount} recent message(s) removed from #${interaction.channel.name}`, source: "discord" });
-        await interaction.editReply(`Removed **${removedCount}** recent ${type} message${removedCount === 1 ? "" : "s"}. Pinned messages and messages older than Discord's two-week limit stay untouched.`);
+        await interaction.editReply({ content: `Removed **${removedCount}** recent ${type} message${removedCount === 1 ? "" : "s"}. Pinned messages and messages older than Discord's two-week limit stay untouched.`, embeds: [] });
         return;
       }
       if (interaction.commandName === "purgeuser") {
@@ -173,12 +175,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!channelPermissions?.has(PermissionsBitField.Flags.ManageMessages)) return interaction.reply({ content: "Duck needs Manage Messages in this channel.", flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser("member", true); const count = interaction.options.getInteger("count", true);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const recent = await interaction.channel.messages.fetch({ limit: 100 });
         const matches = recent.filter((item) => item.author.id === user.id && !item.pinned).first(count);
         const removed = matches.length ? await interaction.channel.bulkDelete(matches, true) : null;
         const removedCount = removed?.size || 0;
         await recordAuditEvent(interaction.guild, { userId: interaction.user.id, targetId: user.id, action: "Purged member messages", reason: `${removedCount} recent message(s) removed from #${interaction.channel.name}`, source: "discord" });
-        await interaction.editReply(`Removed **${removedCount}** recent message${removedCount === 1 ? "" : "s"} from ${user}. Messages older than Discord's two-week bulk-delete limit are skipped.`);
+        await interaction.editReply({ content: `Removed **${removedCount}** recent message${removedCount === 1 ? "" : "s"} from ${user}. Messages older than Discord's two-week bulk-delete limit are skipped.`, embeds: [] });
         return;
       }
       if (interaction.commandName === "modlog") {
@@ -227,8 +230,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const result = await registerCommands(client, { guildIds: [interaction.guildId], syncGlobal: false });
-        await interaction.editReply(`Synchronized ${result.commandCount} slash commands in this server. Discord should show the current options immediately.`);
+        await interaction.editReply({ content: `Synchronized ${result.commandCount} slash commands in this server. Discord should show the current options immediately.`, embeds: [] });
         return;
       }
 
@@ -437,8 +441,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (err) {
     logError("interaction.failed", err, { guildId: interaction.guildId, userId: interaction.user?.id, customId: interaction.customId, commandName: interaction.commandName });
-    if (interaction.deferred && !interaction.replied) {
-      await interaction.editReply({ content: "Duck hit an error while handling that action.", components: [] }).catch(() => {});
+    if (interaction.deferred) {
+      await interaction.editReply({ content: "Duck hit an error while handling that action.", components: [], embeds: [] }).catch(() => {});
     } else if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: "Duck hit an error while handling that.", flags: MessageFlags.Ephemeral }).catch(() => {});
     }
@@ -572,6 +576,7 @@ client.on(Events.MessageCreate, async (message) => {
     const queueMessage = hasConfiguredAi()
       ? await message.reply(makeDuckChatPayload(message, getQueueMessage(), {
           title: "Duck is thinking",
+          status: "thinking",
           color: DUCK_COLORS.neutral,
           footer: "Gathering relevant server context",
         })).catch(() => null)

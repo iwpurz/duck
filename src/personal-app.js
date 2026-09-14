@@ -1,3 +1,4 @@
+import { statusPayload } from "./status-emojis.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder } from "discord.js";
 import { HELPER_TOOLS, VOTE_URL, USER_INSTALL_URL, claimHelperQuota, attachmentMetadata, reverseImageLink, executeHelperTool } from "./helper-tools.js";
 import { PERSONALITIES, personalityPrompt } from "./personality.js";
@@ -84,6 +85,7 @@ async function handlePersonalCommand(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     const subcommand = interaction.options.getSubcommand();
+    await interaction.editReply(statusPayload(subcommand === "ask" ? "thinking" : "loading"));
     const guildSettings = interaction.guild ? getPublicGuildSettings(getGuildSettings(interaction.guildId)) : null;
     const context = { userId: interaction.user.id, guildId: interaction.guildId, webEnabled: guildSettings ? guildSettings.aiWebEnabled : true };
     let data;
@@ -105,8 +107,8 @@ async function handlePersonalCommand(interaction) {
         : subcommand === "search" ? { content: result.results.map((item) => `**${item.title}**\n${item.summary}\n<${item.url}>`).join("\n\n").slice(0, 1900) || "No matching Wikipedia references found." }
         : { content: `Source: <${result.url}>\n${result.text}`.slice(0, 1900) };
     }
-    await interaction.editReply({ ...data, allowedMentions: { parse: [] } });
-  } catch (error) { await interaction.editReply({ content: String(error.message || "Helper failed.").slice(0, 1900), allowedMentions: { parse: [] } }); }
+    await interaction.editReply({ ...data, embeds: [], allowedMentions: { parse: [] } });
+  } catch (error) { await interaction.editReply({ embeds: [], content: String(error.message || "Helper failed.").slice(0, 1900), allowedMentions: { parse: [] } }); }
   return true;
 }
 
