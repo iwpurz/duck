@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { colorOptionEmoji, hexColor } from "../src/color-roles.js";
 
+// omg im verity now
 test("Color Dock formats bounded colors and readable swatches", () => {
   assert.equal(hexColor(0x20a4a8), "#20A4A8");
   assert.equal(hexColor(-50), "#000000");

@@ -4,6 +4,8 @@ import { getPublicGuildSettings } from "./dashboard-config.js";
 import { assertCanPublishTo, recordAuditEvent } from "./community.js";
 import { scanScamImages } from "./scam-images.js";
 
+// this is good as-is plus I'm too lazy to edit this I'm a tire
+
 const SWEAR_WORDS = ["fuck", "shit", "bitch", "cunt", "nigger", "nigga", "faggot", "retard"];
 const SEXUAL_TERMS = ["porn", "hentai", "nudes", "nude", "onlyfans", "sex tape", "rule34", "r34", "xxx"];
 const DISCORD_INVITE_PATTERN = /(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\/[a-z0-9-]+/i;
