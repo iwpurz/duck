@@ -1570,3 +1570,21 @@ html:not([data-theme="windows-xp"]) .settings-page-open :is(input:not([type="che
   .global-account .account-menu { top:calc(var(--chrome-height) + 8px); }
   .public-site .site-header,.dashboard-site:not(.settings-page-open) .dashboard-site-header { top:calc(var(--banner-height) + 8px); }
 }
+
+/* Error pages remain centered in the available space, including small screens. */
+.not-found-main { display:grid; place-items:center; min-height:calc(100dvh - var(--chrome-height) - 180px); padding:clamp(32px,7vw,80px) 0; }
+.not-found-card { width:min(100%,720px); text-align:center; }
+.not-found-card h1 { font-size:clamp(2.3rem,6vw,4rem); line-height:1.06; letter-spacing:-.045em; }
+.not-found-card > p:not(.eyebrow) { max-width:520px; margin-inline:auto; color:var(--theme-muted,var(--muted)); }
+.not-found-card .hero-actions { justify-content:center; }
+.not-found-art { position:relative; display:inline-grid; place-items:center; width:min(100%,340px); margin-bottom:22px; }
+.not-found-art > span { font:900 clamp(6rem,19vw,10rem)/1 var(--sans); letter-spacing:-.07em; color:color-mix(in srgb,var(--theme-accent,var(--green)) 26%,var(--theme-bg,var(--paper))); }
+.not-found-art > i { position:absolute; bottom:0; font-size:clamp(3.5rem,10vw,5rem); font-style:normal; transform:rotate(-9deg); filter:drop-shadow(0 8px 12px rgba(0,0,0,.12)); }
+.page-not-found .site-footer { margin-top:0; }
+@media(max-width:480px) { .not-found-card .hero-actions { flex-direction:column; } .not-found-card .button { width:100%; } }
+
+html[data-theme] body.dashboard-site:is(.settings-page-open,.settings-page-loading) > .site-header { top:var(--banner-height); left:0; right:0; width:100%; margin:0; border-radius:0; }
+.settings-page-open .settings-layout,.settings-page-open .settings-tabs,.settings-page-open .settings-panel,.settings-page-open .settings-dialog > form { min-width:0; }
+
+/* Decorative page shapes sit behind the full-screen panel and must not widen its viewport. */
+body:is(.settings-page-open,.settings-page-loading)::before,body:is(.settings-page-open,.settings-page-loading)::after { display:none; }

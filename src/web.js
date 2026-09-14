@@ -28,6 +28,8 @@ const operatorAssets = new Map([
 ]);
 const operatorAssetCache = new Map([...new Set(["index.html", "unlock.html", ...[...operatorAssets.values()].map(({ file }) => file)])].map((file) => [file, fs.readFileSync(path.join(adminDirectory, file))]));
 const pages = new Map([
+  ["/404", { file: "404.html", type: "text/html; charset=utf-8", status: 404 }],
+  ["/404.html", { file: "404.html", type: "text/html; charset=utf-8", status: 404 }],
   ["/", { file: "index.html", type: "text/html; charset=utf-8" }], ["/index.html", { file: "index.html", type: "text/html; charset=utf-8" }],
   ["/features", { file: "features.html", type: "text/html; charset=utf-8" }], ["/features/", { file: "features.html", type: "text/html; charset=utf-8" }], ["/features.html", { file: "features.html", type: "text/html; charset=utf-8" }],
   ["/updates", { file: "updates.html", type: "text/html; charset=utf-8" }], ["/updates/", { file: "updates.html", type: "text/html; charset=utf-8" }], ["/updates.html", { file: "updates.html", type: "text/html; charset=utf-8" }],
@@ -75,6 +77,7 @@ function acceptsEncoding(header, wanted) {
 function sendAsset(req, res, page, method, extraHeaders = {}) {
   const asset = assetCache.get(page.file);
   if (!asset) return send(res, 500, "text/plain; charset=utf-8", "Duck could not load this page.", method);
+  if (page.status === 404) return sendBuffer(res, 404, page.type, asset.body, method, { "X-Robots-Tag": "noindex, nofollow", ...extraHeaders });
   const isHtml = page.type.startsWith("text/html");
   const version = new URL(req.url, "http://duck.local").searchParams.get("v") || "";
   const versioned = /^[A-Za-z0-9_-]{6,32}$/.test(version);
@@ -498,6 +501,7 @@ function createDuckWebsiteServer(options = {}) {
       const page = pages.get(pathname); if ((page || dashboardGuildPage || dashboardSubpage) && ["GET", "HEAD"].includes(method)) { const dashboardRoute = pathname === "/dashboard" || pathname === "/dashboard/" || pathname === "/dashboard.html" || dashboardGuildPage || dashboardSubpage; return sendAsset(req, res, page || pages.get("/dashboard"), method, dashboardRoute ? { "X-Robots-Tag": "noindex, nofollow, noarchive" } : {}); }
       if (pathname === "/donate/checkout") return json(res, 405, { error: "Method not allowed." }, method, { Allow: "POST" });
       if (page || dashboardGuildPage || dashboardSubpage || pathname.startsWith("/api/") || pathname.startsWith("/auth/")) return json(res, 405, { error: "Method not allowed." }, method, { Allow: "GET, HEAD" });
+      if (["GET", "HEAD"].includes(method) && !/\.(?:js|css|json|png|jpe?g|svg|ico|woff2?)$/i.test(pathname)) return sendAsset(req, res, pages.get("/404"), method);
       return send(res, 404, "text/plain; charset=utf-8", "Duck wandered off. Page not found.", method);
     } catch (error) { const status = error.code === "plus_required" ? 402 : error instanceof SyntaxError ? 400 : error.status || 500; if (status >= 500) reportError("website_request_failed", error, { requestId, method, pathname, status, code: error.code || null }); const childRequest = pathname.startsWith("/internal/children/"); return json(res, status, { error: status === 500 ? `Duck hit an unexpected server error. Reference: ${requestId}` : error.message, ...(childRequest ? { code: error.code || "child_request_failed", managerTime: Number.isSafeInteger(error.managerTime) ? error.managerTime : Date.now() } : {}), requestId }); }
   });
