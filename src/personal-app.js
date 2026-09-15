@@ -1,3 +1,4 @@
+import { getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 import { statusPayload } from "./status-emojis.js";
 import { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, MessageFlags, SlashCommandBuilder } from "discord.js";
 import { HELPER_TOOLS, VOTE_URL, USER_INSTALL_URL, claimHelperQuota, attachmentMetadata, reverseImageLink, executeHelperTool } from "./helper-tools.js";
@@ -47,7 +48,7 @@ async function personalAnswer(prompt, preset, context, fetchImpl) {
     let toolsSupported = true;
     for (let step = 0; step < 3; step += 1) {
       const response = await fetchWithTimeoutAndRetry(getOpenRouterChatEndpoint(), {
-        method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "X-OpenRouter-Title": "Duck personal assistant" },
+        method: "POST", headers: { ...getOpenRouterGatewayHeaders(), Authorization: `Bearer ${key}`, "Content-Type": "application/json", "X-OpenRouter-Title": "Duck personal assistant" },
         body: JSON.stringify({ model: getDefaultAiModel(), max_tokens: 650, messages, ...(toolsSupported && step < 2 ? { tools: availableTools, tool_choice: "auto" } : {}) }),
       }, { attempts: 2, timeoutMs: 15000, maxResponseBytes: 256 * 1024, retryCloudflareChallenges: true, fetchImpl });
       const text = await readBoundedText(response, 256 * 1024);

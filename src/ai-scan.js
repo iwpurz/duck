@@ -1,3 +1,4 @@
+import { getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import { getGuildSettings } from "./config.js";
 import { getAiModelDefinition, getPublicGuildSettings } from "./dashboard-config.js";
@@ -58,6 +59,7 @@ async function requestSuggestion(content, { rules = "No server-specific rules we
   const response = await fetchWithTimeoutAndRetry(getOpenRouterChatEndpoint(), {
     method: "POST",
     headers: {
+      ...getOpenRouterGatewayHeaders(),
       Authorization: `Bearer ${getOpenRouterChatApiKey()}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://duck.wispbyte.app",

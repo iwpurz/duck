@@ -4,7 +4,7 @@ import { HELPER_TOOLS, approvedWebUrl, calculate, claimHelperQuota, attachmentMe
 import { buildPersonalCommands, handlePersonalCommand, personalAnswer } from "../src/personal-app.js";
 import { getPublicGuildSettings, makeSettingsPatch } from "../src/dashboard-config.js";
 import { personalityPrompt } from "../src/personality.js";
-import { executeAiReadTool, registerCommands, validateSlashCommandDispatchers } from "../src/core.js";
+import { getOpenAiCompatibleConfig, executeAiReadTool, registerCommands, validateSlashCommandDispatchers } from "../src/core.js";
 
 test("arithmetic respects precedence without evaluating code", () => {
   assert.equal(calculate("(12 + 3) * 4 / 2").result, 30);
@@ -97,4 +97,21 @@ test("personal AI completes a bounded tool loop without server context", async (
     assert.equal(answer, "4");
     assert.equal(calls, 2);
   } finally { if (previous == null) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = previous; }
+});
+
+test("main OpenRouter chat keeps provider and gateway credentials separate", () => {
+  const keys = ["AI_PROVIDER", "OPENROUTER_API_KEY", "CLOUDFLARE_GATEWAY_API_TOKEN"];
+  const previous = keys.map((key) => process.env[key]);
+  try {
+    process.env.AI_PROVIDER = "openrouter";
+    process.env.OPENROUTER_API_KEY = "provider-token";
+    process.env.CLOUDFLARE_GATEWAY_API_TOKEN = "gateway-token";
+    const config = getOpenAiCompatibleConfig();
+    assert.equal(new URL(config.baseUrl).hostname, "gateway.ai.cloudflare.com");
+    assert.ok(config.baseUrl.endsWith("/openrouter"));
+    assert.equal(config.apiKey, "provider-token");
+    assert.equal(config.extraHeaders["cf-aig-authorization"], "Bearer gateway-token");
+  } finally {
+    keys.forEach((key, i) => { if (previous[i] === undefined) delete process.env[key]; else process.env[key] = previous[i]; });
+  }
 });

@@ -1,3 +1,4 @@
+import { getOpenRouterChatEndpoint, getOpenRouterChatApiKey, getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 // Small dependency-free runtime primitives used by Duck's network and queue paths.
 
 class QueueCapacityError extends Error {
@@ -194,21 +195,10 @@ function describeProviderError(response, text) {
   if (/^\s*</.test(text)) return "The provider returned an unexpected HTML error page. Please try again shortly.";
   try {
     const body = JSON.parse(text);
-    if (typeof body?.error?.message === "string") return body.error.message.slice(0, 220);
+    const message = body?.error?.message || body?.error?.[0]?.message || body?.message;
+    if (typeof message === "string") return message.slice(0, 220);
   } catch { /* Plain-text errors are also supported. */ }
   return String(text).replace(/\s+/g, " ").trim().slice(0, 220);
-}
-
-function getOpenRouterChatEndpoint() {
-  const gatewayToken = String(process.env.CLOUDFLARE_GATEWAY_API_TOKEN || "").trim();
-  if (!gatewayToken) return "https://openrouter.ai/api/v1/chat/completions";
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || "61c882f49c7471d3aecb09ecbd3fc374";
-  const gatewayId = process.env.CLOUDFLARE_GATEWAY_ID || "ai-openrouter-gateway";
-  return `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(accountId)}/${encodeURIComponent(gatewayId)}/openrouter/chat/completions`;
-}
-
-function getOpenRouterChatApiKey() {
-  return String(process.env.CLOUDFLARE_GATEWAY_API_TOKEN || process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || "").trim();
 }
 
 async function fetchWithTimeoutAndRetry(url, options = {}, policy = {}) {
@@ -301,6 +291,7 @@ export {
   QueueCapacityError,
   describeProviderError,
   fetchWithTimeoutAndRetry,
+  getOpenRouterGatewayHeaders,
   getOpenRouterChatApiKey,
   getOpenRouterChatEndpoint,
   isRetryableStatus,

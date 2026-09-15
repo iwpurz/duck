@@ -1,3 +1,4 @@
+import { getOpenRouterChatEndpoint, getOpenRouterChatApiKey, getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 import { statusTitle } from "./status-emojis.js";
 import { HELPER_TOOLS, executeHelperTool, VOTE_URL } from "./helper-tools.js";
 import { personalityPrompt } from "./personality.js";
@@ -3258,7 +3259,7 @@ async function planWithConfiguredAi(message) {
     return planWithOpenAiCompatible(
       message,
       "OpenRouter",
-      "https://openrouter.ai/api/v1",
+      config.baseUrl,
       config.apiKey,
       config.model,
       config.extraHeaders,
@@ -3296,11 +3297,12 @@ function getOpenAiCompatibleConfig(guildId = null) {
       : getAiModelDefinition(getDefaultAiModel());
     return {
       providerName: "OpenRouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY,
+      baseUrl: getOpenRouterChatEndpoint().replace(/\/chat\/completions$/, ""),
+      apiKey: getOpenRouterChatApiKey(),
       model: selected?.id || configuredDefault,
       providerRouting: selected?.providerRouting || null,
       extraHeaders: {
+        ...getOpenRouterGatewayHeaders(),
         "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://duck.local",
         "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME || "Duck Discord Bot",
       },
