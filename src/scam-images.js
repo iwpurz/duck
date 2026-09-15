@@ -172,7 +172,9 @@ async function recognizeImageText(bytes) {
   ocrTail = task.then(() => null, () => null);
 
   try { 
-    return await task; 
+    return await task;
+  } catch {
+    return null;
   } finally { 
     activeOcrJobs -= 1; 
   }

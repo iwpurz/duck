@@ -1,3 +1,6 @@
+import { hasRawToolMarkup, TOOL_FORMAT_RETRY, TOOL_FORMAT_ERROR } from "./ai-output.js";
+import { getOpenRouterChatEndpoint, getOpenRouterChatApiKey, getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
+import { statusTitle } from "./status-emojis.js";
 import { HELPER_TOOLS, executeHelperTool, VOTE_URL } from "./helper-tools.js";
 import { personalityPrompt } from "./personality.js";
 import { PERSONAL_COMMAND_NAMES, buildPersonalCommands } from "./personal-app.js";
@@ -3257,7 +3260,7 @@ async function planWithConfiguredAi(message) {
     return planWithOpenAiCompatible(
       message,
       "OpenRouter",
-      "https://openrouter.ai/api/v1",
+      config.baseUrl,
       config.apiKey,
       config.model,
       config.extraHeaders,
@@ -3295,11 +3298,12 @@ function getOpenAiCompatibleConfig(guildId = null) {
       : getAiModelDefinition(getDefaultAiModel());
     return {
       providerName: "OpenRouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY,
+      baseUrl: getOpenRouterChatEndpoint().replace(/\/chat\/completions$/, ""),
+      apiKey: getOpenRouterChatApiKey(),
       model: selected?.id || configuredDefault,
       providerRouting: selected?.providerRouting || null,
       extraHeaders: {
+        ...getOpenRouterGatewayHeaders(),
         "HTTP-Referer": process.env.OPENROUTER_SITE_URL || "https://duck.local",
         "X-OpenRouter-Title": process.env.OPENROUTER_APP_NAME || "Duck Discord Bot",
       },
@@ -3614,11 +3618,11 @@ function makeAiToolMessageSummary(item, channel) {
   };
 }
 
-async function executeAiReadTool(message, toolCall, allowedContext = null) {
+async function executeAiReadTool(message, toolCall, allowedContext = null, activity = null) {
   const name = String(toolCall?.function?.name || "");
   const args = parseAiToolArguments(toolCall);
   if (HELPER_TOOLS.some((tool) => tool.function.name === name)) {
-    return executeHelperTool(name, args, { userId: message.author.id, guildId: message.guildId, webEnabled: getSafeGuildSettings(message.guildId).aiWebEnabled, attachments: message.attachments });
+    return executeHelperTool(name, args, { userId: message.author.id, guildId: message.guildId, webEnabled: getSafeGuildSettings(message.guildId).aiWebEnabled, attachments: message.attachments, approveWeb: activity?.approveWeb });
   }
   const allowedChannelIds = new Set((allowedContext?.availableChannels ?? []).map((channel) => channel.id));
   const allowedMemberIds = new Set([
@@ -3727,11 +3731,12 @@ function serializeAiToolResult(value) {
   return JSON.stringify({ truncated: true, preview: serialized.slice(0, maxChars - 40) });
 }
 
-async function chatWithOpenAiCompatible(message, config) {
+async function chatWithOpenAiCompatible(message, config, activity = null) {
   if (!config?.apiKey || !config?.model) return null;
 
   const startedAt = Date.now();
   const url = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  await activity?.update("context");
   const context = await collectServerContext(message);
   const guildSettings = getSafeGuildSettings(message?.guildId);
   const includeVision = guildSettings.aiVisionEnabled !== false && isAiVisionEnabled() && modelSupportsVision(config.providerName, config.model, {
@@ -3812,8 +3817,10 @@ async function chatWithOpenAiCompatible(message, config) {
   const proposedActions = [];
   const maxToolSteps = getAiAgentMaxSteps(message.guildId);
   let toolStep = 0;
+  let retriedToolFormat = false;
 
   async function getNextResponse(allowTools = true) {
+    await activity?.update("thinking");
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let response;
     try {
@@ -3862,6 +3869,17 @@ async function chatWithOpenAiCompatible(message, config) {
     body = await readBoundedJson(response, 2 * 1024 * 1024);
     choiceMessage = body.choices?.[0]?.message;
     content = extractAiTextContent(choiceMessage);
+    if (hasRawToolMarkup(content)) {
+      if (choiceMessage?.tool_calls?.length) {
+        content = "";
+        choiceMessage.content = null;
+      } else {
+        if (retriedToolFormat) throw new Error(TOOL_FORMAT_ERROR);
+        retriedToolFormat = true;
+        activeMessages.push({ role: "system", content: TOOL_FORMAT_RETRY });
+        return getNextResponse(allowTools);
+      }
+    }
     if ((typeof content === "string" && content.trim()) || choiceMessage?.tool_calls?.length) return;
 
     logWarn("ai.chat.empty-content-retry", {
@@ -3885,6 +3903,7 @@ async function chatWithOpenAiCompatible(message, config) {
       tool_calls: choiceMessage.tool_calls,
     });
     for (const [toolIndex, toolCall] of choiceMessage.tool_calls.entries()) {
+      await activity?.update(toolCall.function?.name);
       const signature = `${toolCall.function?.name}:${toolCall.function?.arguments}`;
       let result;
       try {
@@ -3903,7 +3922,7 @@ async function chatWithOpenAiCompatible(message, config) {
             instruction: "Explain that Duck prepared the proposal. Do not claim it executed yet.",
           };
         } else {
-          result = await executeAiReadTool(message, toolCall, context);
+          result = await executeAiReadTool(message, toolCall, context, activity);
         }
         logInfo("ai.chat.tool-completed", {
           guildId: message.guildId,
@@ -3921,6 +3940,7 @@ async function chatWithOpenAiCompatible(message, config) {
           error: result.error,
         });
       }
+      await activity?.update(toolCall.function?.name, result);
       activeMessages.push({ role: "tool", tool_call_id: toolCall.id, content: serializeAiToolResult(result) });
     }
     content = "";
@@ -4021,6 +4041,7 @@ async function chatWithOllama(message) {
 
   const body = await readBoundedJson(response, 2 * 1024 * 1024);
   const content = extractAiTextContent(body.message);
+  if (hasRawToolMarkup(content)) throw new Error(TOOL_FORMAT_ERROR);
   logDebug("ai.ollama.chat.result", {
     model,
     hasContent: typeof content === "string" && Boolean(content.trim()),
@@ -4260,7 +4281,7 @@ function parseInlineToolCall(message, content) {
   };
 }
 
-async function generateChatResponse(message) {
+async function generateChatResponse(message, activity = null) {
   const provider = getConfiguredAiProvider();
   logDebug("ai.chat.provider", { provider, messageId: message.id, channelId: message.channelId });
   try {
@@ -4275,7 +4296,7 @@ async function generateChatResponse(message) {
 
     const config = getOpenAiCompatibleConfig(message.guildId);
     if (config) {
-      const result = await scheduleAiRequest(message, "chat", () => chatWithOpenAiCompatible(message, config));
+      const result = await scheduleAiRequest(message, "chat", () => chatWithOpenAiCompatible(message, config, activity));
       const content = await resolveAiFunCall(message, typeof result === "string" ? result : result?.content);
       rememberAiReply(message, content);
       return { content, plan: typeof result === "object" ? result?.plan ?? null : null, error: null };
@@ -7146,7 +7167,7 @@ function makeCommandResponseEmbed(message, content, options = {}) {
 
 function makeDuckChatEmbed(message, content, options = {}) {
   const embed = new EmbedBuilder()
-    .setTitle(options.title || "Duck")
+    .setTitle(statusTitle(options.title || "Duck", options.status))
     .setDescription(limitDiscordContent(content, 4000))
     .setColor(options.color || DUCK_COLORS.brand)
     .setTimestamp();

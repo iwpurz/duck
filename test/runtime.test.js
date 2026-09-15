@@ -6,12 +6,36 @@ import {
   QueueCapacityError,
   describeProviderError,
   fetchWithTimeoutAndRetry,
+  getOpenRouterGatewayHeaders,
+  getOpenRouterChatApiKey,
+  getOpenRouterChatEndpoint,
   modelSupportsVision,
   readBoundedJson,
   readBoundedText,
 } from "../src/runtime.js";
 
 const challengeHtml = '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>';
+
+test("OpenRouter chat uses the Cloudflare AI Gateway when configured", () => {
+  const previousToken = process.env.CLOUDFLARE_GATEWAY_API_TOKEN;
+  const previousAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const previousGateway = process.env.CLOUDFLARE_GATEWAY_ID;
+  process.env.CLOUDFLARE_GATEWAY_API_TOKEN = "gateway-test-token";
+  process.env.CLOUDFLARE_ACCOUNT_ID = "account-test";
+  process.env.CLOUDFLARE_GATEWAY_ID = "gateway-test";
+  try {
+    assert.equal(getOpenRouterChatEndpoint(), "https://gateway.ai.cloudflare.com/v1/account-test/gateway-test/openrouter/chat/completions");
+    assert.equal(getOpenRouterChatApiKey(), String(process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || "").trim());
+    assert.deepEqual(getOpenRouterGatewayHeaders(), { "cf-aig-authorization": "Bearer gateway-test-token" });
+    delete process.env.CLOUDFLARE_GATEWAY_API_TOKEN;
+    assert.equal(getOpenRouterChatEndpoint(), "https://openrouter.ai/api/v1/chat/completions");
+    assert.deepEqual(getOpenRouterGatewayHeaders(), {});
+  } finally {
+    previousToken == null ? delete process.env.CLOUDFLARE_GATEWAY_API_TOKEN : process.env.CLOUDFLARE_GATEWAY_API_TOKEN = previousToken;
+    previousAccount == null ? delete process.env.CLOUDFLARE_ACCOUNT_ID : process.env.CLOUDFLARE_ACCOUNT_ID = previousAccount;
+    previousGateway == null ? delete process.env.CLOUDFLARE_GATEWAY_ID : process.env.CLOUDFLARE_GATEWAY_ID = previousGateway;
+  }
+});
 
 test("Cloudflare HTML challenges retry with a bounded budget and readable final errors", async () => {
   let calls = 0;
@@ -163,4 +187,8 @@ test("network policy retries transient responses and enforces a deadline", async
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Cloudflare gateway configuration errors stay readable", () => {
+  assert.equal(describeProviderError(new Response(null, { status: 400 }), JSON.stringify({ error: [{ code: 2001, message: "Please configure AI Gateway in the Cloudflare dashboard" }] })), "Please configure AI Gateway in the Cloudflare dashboard");
 });

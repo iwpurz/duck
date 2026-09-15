@@ -4,7 +4,7 @@ import { HELPER_TOOLS, approvedWebUrl, calculate, claimHelperQuota, attachmentMe
 import { buildPersonalCommands, handlePersonalCommand, personalAnswer } from "../src/personal-app.js";
 import { getPublicGuildSettings, makeSettingsPatch } from "../src/dashboard-config.js";
 import { personalityPrompt } from "../src/personality.js";
-import { executeAiReadTool, registerCommands, validateSlashCommandDispatchers } from "../src/core.js";
+import { getOpenAiCompatibleConfig, executeAiReadTool, registerCommands, validateSlashCommandDispatchers } from "../src/core.js";
 
 test("arithmetic respects precedence without evaluating code", () => {
   assert.equal(calculate("(12 + 3) * 4 / 2").result, 30);
@@ -21,11 +21,11 @@ test("internet helpers reject private destinations, credentials, lookalike hosts
 });
 
 test("reference search uses bounded, credential-free, redirect-free requests and gives sources", async () => {
-  const result = await executeHelperTool("search_web", { query: "Duck" }, { webEnabled: true, userId: "search-user", guildId: "search-guild" }, async (url, options) => {
-    assert.equal(new URL(url).hostname, "en.wikipedia.org");
+  const result = await executeHelperTool("search_web", { query: "Duck" }, { webEnabled: true, userId: "search-user", guildId: "search-guild", approveWeb: async () => true }, async (url, options) => {
+    assert.equal(new URL(url).hostname, "www.bing.com");
     assert.equal(options.redirect, "error");
     assert.equal(options.headers.Authorization, undefined);
-    return Response.json({ query: { search: [{ title: "Duck", snippet: "<b>Duck</b> is a bird." }] } });
+    return new Response("<rss><channel><item><title>Duck</title><description>Duck is a bird.</description><link>https://en.wikipedia.org/wiki/Duck</link></item></channel></rss>", { headers: { "content-type": "text/xml" } });
   });
   assert.equal(result.untrusted, true);
   assert.equal(result.results[0].summary, "Duck is a bird.");
@@ -97,4 +97,21 @@ test("personal AI completes a bounded tool loop without server context", async (
     assert.equal(answer, "4");
     assert.equal(calls, 2);
   } finally { if (previous == null) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = previous; }
+});
+
+test("main OpenRouter chat keeps provider and gateway credentials separate", () => {
+  const keys = ["AI_PROVIDER", "OPENROUTER_API_KEY", "CLOUDFLARE_GATEWAY_API_TOKEN"];
+  const previous = keys.map((key) => process.env[key]);
+  try {
+    process.env.AI_PROVIDER = "openrouter";
+    process.env.OPENROUTER_API_KEY = "provider-token";
+    process.env.CLOUDFLARE_GATEWAY_API_TOKEN = "gateway-token";
+    const config = getOpenAiCompatibleConfig();
+    assert.equal(new URL(config.baseUrl).hostname, "gateway.ai.cloudflare.com");
+    assert.ok(config.baseUrl.endsWith("/openrouter"));
+    assert.equal(config.apiKey, "provider-token");
+    assert.equal(config.extraHeaders["cf-aig-authorization"], "Bearer gateway-token");
+  } finally {
+    keys.forEach((key, i) => { if (previous[i] === undefined) delete process.env[key]; else process.env[key] = previous[i]; });
+  }
 });

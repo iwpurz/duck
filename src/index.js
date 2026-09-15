@@ -1,3 +1,5 @@
+import { createChatActivity, handleChatActivity } from "./chat-activity.js";
+import { statusPayload } from "./status-emojis.js";
 import { handlePersonalCommand } from "./personal-app.js";
 import { Events, ActivityType, MessageFlags, PermissionsBitField } from "discord.js";
 import { client } from "./client.js";
@@ -17,7 +19,8 @@ import { startDuckOperatorServer } from "./admin.js";
 async function sendDuckChatPages(message, content, options = {}, messageToEdit = null) {
   const chunks = splitDiscordLines(String(content ?? "").split(/\r?\n/), 3900);
   const pageOptions = (index) => ({ ...options, title: chunks.length > 1 ? `${options.title || "Duck"} · ${index + 1}/${chunks.length}` : options.title });
-  const firstPayload = makeDuckChatPayload(message, chunks[0] || "Duck returned an empty response.", pageOptions(0));
+  let firstPayload = makeDuckChatPayload(message, chunks[0] || "Duck returned an empty response.", pageOptions(0));
+  if (options.activity) firstPayload = options.activity.finish(firstPayload);
   const first = messageToEdit ? await messageToEdit.edit(firstPayload) : await message.reply(firstPayload);
   for (let index = 1; index < chunks.length; index += 1) {
     await message.channel.send(makeDuckChatPayload(message, chunks[index], pageOptions(index)));
@@ -159,12 +162,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         };
         if (!matchers[type]) return interaction.reply({ content: "Choose a supported cleanup type.", flags: MessageFlags.Ephemeral });
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const recent = await interaction.channel.messages.fetch({ limit: 100 });
         const matches = recent.filter((item) => !item.pinned && matchers[type](item)).first(count);
         const removed = matches.length ? await interaction.channel.bulkDelete(matches, true) : null;
         const removedCount = removed?.size || 0;
         await recordAuditEvent(interaction.guild, { userId: interaction.user.id, action: `Cleaned ${type} messages`, reason: `${removedCount} recent message(s) removed from #${interaction.channel.name}`, source: "discord" });
-        await interaction.editReply(`Removed **${removedCount}** recent ${type} message${removedCount === 1 ? "" : "s"}. Pinned messages and messages older than Discord's two-week limit stay untouched.`);
+        await interaction.editReply({ content: `Removed **${removedCount}** recent ${type} message${removedCount === 1 ? "" : "s"}. Pinned messages and messages older than Discord's two-week limit stay untouched.`, embeds: [] });
         return;
       }
       if (interaction.commandName === "purgeuser") {
@@ -173,12 +177,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!channelPermissions?.has(PermissionsBitField.Flags.ManageMessages)) return interaction.reply({ content: "Duck needs Manage Messages in this channel.", flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser("member", true); const count = interaction.options.getInteger("count", true);
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const recent = await interaction.channel.messages.fetch({ limit: 100 });
         const matches = recent.filter((item) => item.author.id === user.id && !item.pinned).first(count);
         const removed = matches.length ? await interaction.channel.bulkDelete(matches, true) : null;
         const removedCount = removed?.size || 0;
         await recordAuditEvent(interaction.guild, { userId: interaction.user.id, targetId: user.id, action: "Purged member messages", reason: `${removedCount} recent message(s) removed from #${interaction.channel.name}`, source: "discord" });
-        await interaction.editReply(`Removed **${removedCount}** recent message${removedCount === 1 ? "" : "s"} from ${user}. Messages older than Discord's two-week bulk-delete limit are skipped.`);
+        await interaction.editReply({ content: `Removed **${removedCount}** recent message${removedCount === 1 ? "" : "s"} from ${user}. Messages older than Discord's two-week bulk-delete limit are skipped.`, embeds: [] });
         return;
       }
       if (interaction.commandName === "modlog") {
@@ -227,8 +232,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return;
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        await interaction.editReply(statusPayload("loading"));
         const result = await registerCommands(client, { guildIds: [interaction.guildId], syncGlobal: false });
-        await interaction.editReply(`Synchronized ${result.commandCount} slash commands in this server. Discord should show the current options immediately.`);
+        await interaction.editReply({ content: `Synchronized ${result.commandCount} slash commands in this server. Discord should show the current options immediately.`, embeds: [] });
         return;
       }
 
@@ -410,6 +416,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.isButton()) {
+      if (await handleChatActivity(interaction)) return;
       const suggestionResult = await handleSuggestionDecision(interaction);
       if (suggestionResult !== false) return;
       const communityResult = await handleCommunityButton(interaction);
@@ -437,8 +444,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   } catch (err) {
     logError("interaction.failed", err, { guildId: interaction.guildId, userId: interaction.user?.id, customId: interaction.customId, commandName: interaction.commandName });
-    if (interaction.deferred && !interaction.replied) {
-      await interaction.editReply({ content: "Duck hit an error while handling that action.", components: [] }).catch(() => {});
+    if (interaction.deferred) {
+      await interaction.editReply({ content: "Duck hit an error while handling that action.", components: [], embeds: [] }).catch(() => {});
     } else if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: "Duck hit an error while handling that.", flags: MessageFlags.Ephemeral }).catch(() => {});
     }
@@ -572,6 +579,7 @@ client.on(Events.MessageCreate, async (message) => {
     const queueMessage = hasConfiguredAi()
       ? await message.reply(makeDuckChatPayload(message, getQueueMessage(), {
           title: "Duck is thinking",
+          status: "thinking",
           color: DUCK_COLORS.neutral,
           footer: "Gathering relevant server context",
         })).catch(() => null)
@@ -599,12 +607,13 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
 
+    const activity = createChatActivity(message.author.id, (payload) => queueMessage ? queueMessage.edit(payload) : Promise.resolve());
     let plan = null;
     let toolResponseContent = null;
     let chatError = null;
     if (wantsToolPlan) {
       if (hasConfiguredAi()) {
-        const chatResult = await generateChatResponse(planningMessage);
+        const chatResult = await generateChatResponse(planningMessage, activity);
         chatError = chatResult.error;
         if (chatResult.content) {
           const parsedToolCall = parseInlineToolCall(planningMessage, chatResult.content);
@@ -657,7 +666,7 @@ client.on(Events.MessageCreate, async (message) => {
       const chatResult = toolResponseContent
         ? { content: toolResponseContent, error: chatError }
         : hasConfiguredAi()
-          ? await generateChatResponse(planningMessage)
+          ? await generateChatResponse(planningMessage, activity)
           : { content: null, error: "AI is not configured, so I cannot answer as a chatbot right now." };
       const content = chatResult.content
         ?? chatResult.error
@@ -706,6 +715,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
         await sendDuckChatPages(message, parsedToolCall.content || content, {
           color: chatResult.error ? DUCK_COLORS.danger : DUCK_COLORS.brand,
+          activity,
         }, queueMessage);
       } else if (content) {
         const parsedToolCall = parseInlineToolCall(planningMessage, content);
@@ -741,6 +751,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
         await sendDuckChatPages(message, parsedToolCall.content || content, {
           color: chatResult.error ? DUCK_COLORS.danger : DUCK_COLORS.brand,
+          activity,
         });
       } else if (queueMessage) {
         await queueMessage.edit(makeDuckChatPayload(message, "I tried to answer, but AI returned no content and I do not have a local fallback for that.", {

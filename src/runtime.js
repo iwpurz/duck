@@ -1,3 +1,4 @@
+import { getOpenRouterChatEndpoint, getOpenRouterChatApiKey, getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 // Small dependency-free runtime primitives used by Duck's network and queue paths.
 
 class QueueCapacityError extends Error {
@@ -198,7 +199,8 @@ function describeProviderError(response, text) {
   if (/^\s*</.test(text)) return "The provider returned an unexpected HTML error page. Please try again shortly.";
   try {
     const body = JSON.parse(text);
-    if (typeof body?.error?.message === "string") return body.error.message.slice(0, 220);
+    const message = body?.error?.message || body?.error?.[0]?.message || body?.message;
+    if (typeof message === "string") return message.slice(0, 220);
   } catch { /* Plain-text errors are also supported. */ }
   return String(text).replace(/\s+/g, " ").trim().slice(0, 220);
 }
@@ -293,6 +295,9 @@ export {
   QueueCapacityError,
   describeProviderError,
   fetchWithTimeoutAndRetry,
+  getOpenRouterGatewayHeaders,
+  getOpenRouterChatApiKey,
+  getOpenRouterChatEndpoint,
   isRetryableStatus,
   modelSupportsVision,
   parseRetryAfterMs,

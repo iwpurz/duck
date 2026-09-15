@@ -10,7 +10,6 @@ import {
  * Generates an 8x9 pixel row buffer for difference hash testing.
  * @param {number[]} values Row value pattern (9 numbers per row)
  * @returns {Buffer} An 8x9 pixel buffer (72 bytes)
- * brain go brrrrr
  */
 function createRowBuffer(values) {
   return Buffer.from(Array.from({ length: 8 }, () => values).flat());

@@ -60,11 +60,13 @@ function createEnrolledWorker(ctx, label = "test child") {
     version: "1.0.0",
   });
 
+  assert.match(worker.childId, /^child_[a-z0-9]{12}$/);
+  assert.ok(ctx.getState().workers[worker.childId]);
   return { ...worker, keys };
 }
 
 /**
- * Generates an HMAC-signed API request from an enrolled worker so things do not be those things that you thought of things because this is actually a thing
+ * Generates an Ed25519-signed API request using the enrollment response.
  */
 function createSignedRequest(
   worker,

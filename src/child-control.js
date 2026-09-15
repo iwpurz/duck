@@ -4,8 +4,6 @@ import { loadJsonFile, saveJsonFile } from "./config.js";
 import { getClusterManager } from "./clusters.js";
 import { getOperatorState, recordOperatorAction } from "./operator-state.js";
 
-// v3ltrix can't organize anything fr my head hurt i had to fix it
-
 const WORKER_NODE_ID_REGEX = /^child_[a-z0-9]{12}$/;
 const CLUSTER_ID_REGEX = /^cluster-\d{2}$/;
 const DISCORD_ID_REGEX = /^\d{10,20}$/;
@@ -284,7 +282,7 @@ class ClusterControlPlane {
     });
 
     return {
-      workerId,
+      childId: workerId,
       managerTime: this.now(),
       heartbeatIntervalMs: 15_000,
       protocolVersion: 1,
@@ -305,14 +303,14 @@ class ClusterControlPlane {
     ) {
       throw Object.assign(new Error("Worker request authentication failed."), {
         status: 401,
-        code: "auth_malformed",
+        code: "child_auth_malformed",
       });
     }
 
     if (Math.abs(this.now() - timestamp) > 60_000) {
       throw Object.assign(new Error("Worker request clock is out of sync."), {
         status: 401,
-        code: "clock_skew",
+        code: "child_clock_skew",
         managerTime: this.now(),
       });
     }
@@ -359,7 +357,7 @@ class ClusterControlPlane {
     if (!isValidSignature) {
       throw Object.assign(new Error("Worker request signature is invalid."), {
         status: 401,
-        code: "signature_invalid",
+        code: "child_signature_invalid",
       });
     }
 
@@ -537,7 +535,7 @@ class ClusterControlPlane {
       const timer = setTimeout(() => {
         this.jobWaiters.delete(job.id);
         job.status = "expired";
-        reject(Object.assign(new Error("Worker job timed out."), { code: "job_timeout" }));
+        reject(Object.assign(new Error("Worker job timed out."), { code: "child_timeout" }));
       }, timeoutMs);
 
       timer.unref?.();
@@ -624,7 +622,7 @@ class ClusterControlPlane {
         waiter.resolve(input.result);
       } else {
         waiter.reject(
-          Object.assign(new Error(job.error || "Worker job failed."), { code: "job_failed" })
+          Object.assign(new Error(job.error || "Worker job failed."), { code: "child_failed" })
         );
       }
     }

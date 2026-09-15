@@ -18,6 +18,30 @@ async function withWebsite(run, options = {}) {
   }
 }
 
+test("missing pages render a themed 404 with root-relative assets and correct HTTP semantics", async () => {
+  await withWebsite(async (origin) => {
+    for (const route of ["/missing/deep/page", "/404", "/404.html"]) {
+      const response = await fetch(`${origin}${route}`);
+      assert.equal(response.status, 404);
+      assert.match(response.headers.get("content-type"), /text\/html/);
+      assert.match(response.headers.get("x-robots-tag"), /noindex/);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const html = await response.text();
+      assert.match(html, /This page has waddled off/);
+      assert.match(html, /href="\/styles.css\?v=/);
+      assert.match(html, /href="\/dashboard"/);
+    }
+    const head = await fetch(`${origin}/missing/deep/page`, { method: "HEAD" });
+    assert.equal(head.status, 404);
+    assert.equal(await head.text(), "");
+    const asset = await fetch(`${origin}/missing.js`);
+    assert.equal(asset.status, 404);
+    assert.match(asset.headers.get("content-type"), /text\/plain/);
+    const log = await fetch(`${origin}/updates`);
+    assert.match(await log.text(), /September 14, 2026/);
+  });
+});
+
 test("website serves the homepage, privacy policy, assets, and health route", async () => {
   await withWebsite(async (origin) => {
     const homepage = await fetch(`${origin}/`);
@@ -60,10 +84,10 @@ test("website serves the homepage, privacy policy, assets, and health route", as
     assert.equal(css.headers.get("cache-control"), "public, max-age=3600, stale-while-revalidate=86400");
     const cssText = await css.text(); assert.match(cssText, /Dark palettes must also neutralize older light-only module surfaces/); assert.match(cssText, /html\[data-theme="dark"\].*\.settings-group/); assert.match(cssText, /\.public-site \.cta h2 \{ color:#fff; \}/); assert.match(cssText, /\.public-site \.cta \.eyebrow \{ color:#9be1bd; \}/);
 
-    const versionedCss = await fetch(`${origin}/styles.css?v=20260913`, { headers: { "Accept-Encoding": "identity" } });
+    const versionedCss = await fetch(`${origin}/styles.css?v=20260914`, { headers: { "Accept-Encoding": "identity" } });
     assert.equal(versionedCss.status, 200);
     assert.equal(versionedCss.headers.get("cache-control"), "public, max-age=31536000, immutable");
-    const brotliCss = await fetch(`${origin}/styles.css?v=20260913`, { headers: { "Accept-Encoding": "br" } });
+    const brotliCss = await fetch(`${origin}/styles.css?v=20260914`, { headers: { "Accept-Encoding": "br" } });
     assert.equal(brotliCss.status, 200);
     assert.equal(brotliCss.headers.get("content-encoding"), "br");
     assert.match(await brotliCss.text(), /2026 public-site rebuild/);
@@ -97,7 +121,7 @@ test("website serves the homepage, privacy policy, assets, and health route", as
     assert.match(dashboardText, /Context range/);
     assert.doesNotMatch(dashboardText, /Activate owner Plus/);
     assert.match(dashboardText, /theme-init\.js\?v=20260841/);
-    assert.match(dashboardText, /styles\.css\?v=20260913/);
+    assert.match(dashboardText, /styles\.css\?v=20260914/);
     assert.match(dashboardText, /dashboard\.js\?v=20260913/);
     assert.match(dashboardText, /Message contains a link/);
     assert.match(dashboardText, /Send the member a DM/);

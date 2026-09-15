@@ -68,7 +68,6 @@ test("ClusterManager - Health, Status, & Environment Parsing", async (t) => {
       ]
     );
 
-    // Verify (OMG NEW VERITY!11!!11!1)
     assert.equal(clusters[0].uptimeSeconds, 120);
     assert.equal(clusters[2].uptimeSeconds, 0);
     assert.equal(clusters[2].lastHeartbeatAt, null);
