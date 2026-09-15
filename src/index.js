@@ -1,3 +1,4 @@
+import { createChatActivity, handleChatActivity } from "./chat-activity.js";
 import { statusPayload } from "./status-emojis.js";
 import { handlePersonalCommand } from "./personal-app.js";
 import { Events, ActivityType, MessageFlags, PermissionsBitField } from "discord.js";
@@ -18,7 +19,8 @@ import { startDuckOperatorServer } from "./admin.js";
 async function sendDuckChatPages(message, content, options = {}, messageToEdit = null) {
   const chunks = splitDiscordLines(String(content ?? "").split(/\r?\n/), 3900);
   const pageOptions = (index) => ({ ...options, title: chunks.length > 1 ? `${options.title || "Duck"} · ${index + 1}/${chunks.length}` : options.title });
-  const firstPayload = makeDuckChatPayload(message, chunks[0] || "Duck returned an empty response.", pageOptions(0));
+  let firstPayload = makeDuckChatPayload(message, chunks[0] || "Duck returned an empty response.", pageOptions(0));
+  if (options.activity) firstPayload = options.activity.finish(firstPayload);
   const first = messageToEdit ? await messageToEdit.edit(firstPayload) : await message.reply(firstPayload);
   for (let index = 1; index < chunks.length; index += 1) {
     await message.channel.send(makeDuckChatPayload(message, chunks[index], pageOptions(index)));
@@ -414,6 +416,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.isButton()) {
+      if (await handleChatActivity(interaction)) return;
       const suggestionResult = await handleSuggestionDecision(interaction);
       if (suggestionResult !== false) return;
       const communityResult = await handleCommunityButton(interaction);
@@ -604,12 +607,13 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
 
+    const activity = createChatActivity(message.author.id, (payload) => queueMessage ? queueMessage.edit(payload) : Promise.resolve());
     let plan = null;
     let toolResponseContent = null;
     let chatError = null;
     if (wantsToolPlan) {
       if (hasConfiguredAi()) {
-        const chatResult = await generateChatResponse(planningMessage);
+        const chatResult = await generateChatResponse(planningMessage, activity);
         chatError = chatResult.error;
         if (chatResult.content) {
           const parsedToolCall = parseInlineToolCall(planningMessage, chatResult.content);
@@ -662,7 +666,7 @@ client.on(Events.MessageCreate, async (message) => {
       const chatResult = toolResponseContent
         ? { content: toolResponseContent, error: chatError }
         : hasConfiguredAi()
-          ? await generateChatResponse(planningMessage)
+          ? await generateChatResponse(planningMessage, activity)
           : { content: null, error: "AI is not configured, so I cannot answer as a chatbot right now." };
       const content = chatResult.content
         ?? chatResult.error
@@ -711,6 +715,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
         await sendDuckChatPages(message, parsedToolCall.content || content, {
           color: chatResult.error ? DUCK_COLORS.danger : DUCK_COLORS.brand,
+          activity,
         }, queueMessage);
       } else if (content) {
         const parsedToolCall = parseInlineToolCall(planningMessage, content);
@@ -746,6 +751,7 @@ client.on(Events.MessageCreate, async (message) => {
         }
         await sendDuckChatPages(message, parsedToolCall.content || content, {
           color: chatResult.error ? DUCK_COLORS.danger : DUCK_COLORS.brand,
+          activity,
         });
       } else if (queueMessage) {
         await queueMessage.edit(makeDuckChatPayload(message, "I tried to answer, but AI returned no content and I do not have a local fallback for that.", {

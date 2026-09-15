@@ -3617,11 +3617,11 @@ function makeAiToolMessageSummary(item, channel) {
   };
 }
 
-async function executeAiReadTool(message, toolCall, allowedContext = null) {
+async function executeAiReadTool(message, toolCall, allowedContext = null, activity = null) {
   const name = String(toolCall?.function?.name || "");
   const args = parseAiToolArguments(toolCall);
   if (HELPER_TOOLS.some((tool) => tool.function.name === name)) {
-    return executeHelperTool(name, args, { userId: message.author.id, guildId: message.guildId, webEnabled: getSafeGuildSettings(message.guildId).aiWebEnabled, attachments: message.attachments });
+    return executeHelperTool(name, args, { userId: message.author.id, guildId: message.guildId, webEnabled: getSafeGuildSettings(message.guildId).aiWebEnabled, attachments: message.attachments, approveWeb: activity?.approveWeb });
   }
   const allowedChannelIds = new Set((allowedContext?.availableChannels ?? []).map((channel) => channel.id));
   const allowedMemberIds = new Set([
@@ -3730,11 +3730,12 @@ function serializeAiToolResult(value) {
   return JSON.stringify({ truncated: true, preview: serialized.slice(0, maxChars - 40) });
 }
 
-async function chatWithOpenAiCompatible(message, config) {
+async function chatWithOpenAiCompatible(message, config, activity = null) {
   if (!config?.apiKey || !config?.model) return null;
 
   const startedAt = Date.now();
   const url = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
+  await activity?.update("context");
   const context = await collectServerContext(message);
   const guildSettings = getSafeGuildSettings(message?.guildId);
   const includeVision = guildSettings.aiVisionEnabled !== false && isAiVisionEnabled() && modelSupportsVision(config.providerName, config.model, {
@@ -3817,6 +3818,7 @@ async function chatWithOpenAiCompatible(message, config) {
   let toolStep = 0;
 
   async function getNextResponse(allowTools = true) {
+    await activity?.update("thinking");
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let response;
     try {
@@ -3888,6 +3890,7 @@ async function chatWithOpenAiCompatible(message, config) {
       tool_calls: choiceMessage.tool_calls,
     });
     for (const [toolIndex, toolCall] of choiceMessage.tool_calls.entries()) {
+      await activity?.update(toolCall.function?.name);
       const signature = `${toolCall.function?.name}:${toolCall.function?.arguments}`;
       let result;
       try {
@@ -3906,7 +3909,7 @@ async function chatWithOpenAiCompatible(message, config) {
             instruction: "Explain that Duck prepared the proposal. Do not claim it executed yet.",
           };
         } else {
-          result = await executeAiReadTool(message, toolCall, context);
+          result = await executeAiReadTool(message, toolCall, context, activity);
         }
         logInfo("ai.chat.tool-completed", {
           guildId: message.guildId,
@@ -3924,6 +3927,7 @@ async function chatWithOpenAiCompatible(message, config) {
           error: result.error,
         });
       }
+      await activity?.update(toolCall.function?.name, result);
       activeMessages.push({ role: "tool", tool_call_id: toolCall.id, content: serializeAiToolResult(result) });
     }
     content = "";
@@ -4263,7 +4267,7 @@ function parseInlineToolCall(message, content) {
   };
 }
 
-async function generateChatResponse(message) {
+async function generateChatResponse(message, activity = null) {
   const provider = getConfiguredAiProvider();
   logDebug("ai.chat.provider", { provider, messageId: message.id, channelId: message.channelId });
   try {
@@ -4278,7 +4282,7 @@ async function generateChatResponse(message) {
 
     const config = getOpenAiCompatibleConfig(message.guildId);
     if (config) {
-      const result = await scheduleAiRequest(message, "chat", () => chatWithOpenAiCompatible(message, config));
+      const result = await scheduleAiRequest(message, "chat", () => chatWithOpenAiCompatible(message, config, activity));
       const content = await resolveAiFunCall(message, typeof result === "string" ? result : result?.content);
       rememberAiReply(message, content);
       return { content, plan: typeof result === "object" ? result?.plan ?? null : null, error: null };

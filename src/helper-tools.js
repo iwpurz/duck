@@ -1,3 +1,4 @@
+import { publicWebUrl, fetchPublicWeb } from "./public-web.js";
 import { fetchWithTimeoutAndRetry, readBoundedText } from "./runtime.js";
 
 const VOTE_URL = "https://top.gg/bot/1507850959642955816/vote";
@@ -36,35 +37,36 @@ function plainText(html) {
 }
 
 async function getWebText(url, context, fetchImpl) {
-  approvedWebUrl(url);
+  publicWebUrl(url);
+  if (typeof context.approveWeb !== "function" || !await context.approveWeb(String(url))) throw new Error("Web access was not approved.");
   if (activeWebRequests >= 4) throw new Error("Duck's web readers are busy. Try again shortly.");
   claimHelperQuota(context.userId, context.guildId);
   activeWebRequests += 1;
   try {
+    if (!fetchImpl) return await fetchPublicWeb(url);
     const response = await fetchWithTimeoutAndRetry(String(url), {
       method: "GET", redirect: "error",
       headers: { Accept: "text/html, application/json, text/plain", "User-Agent": "DuckDiscordBot/1.3 (public reference lookup)" },
     }, { attempts: 1, timeoutMs: 8000, maxResponseBytes: 512 * 1024, fetchImpl });
     if (!response.ok) throw new Error(`Reference site returned HTTP ${response.status}.`);
-    if (!/^(text\/(html|plain)|application\/json)\b/i.test(response.headers.get("content-type") || "")) throw new Error("Reference site returned an unsupported content type.");
+    if (!/^(text\/(html|plain|xml)|application\/(json|rss\+xml|xml))\b/i.test(response.headers.get("content-type") || "")) throw new Error("Reference site returned an unsupported content type.");
     return await readBoundedText(response, 512 * 1024);
   } finally { activeWebRequests -= 1; }
 }
 
 async function searchWeb(query, context, fetchImpl) {
   if (typeof query !== "string" || !query.trim() || query.length > 180) throw new Error("Search must be 1–180 characters.");
-  const url = new URL("https://en.wikipedia.org/w/api.php");
-  url.search = new URLSearchParams({ action: "query", list: "search", srsearch: query.trim(), srlimit: "3", format: "json" });
-  const data = JSON.parse(await getWebText(url, context, fetchImpl));
-  if (!Array.isArray(data?.query?.search)) throw new Error("Reference search returned an invalid result.");
-  return { source: "Wikipedia reference search", untrusted: true, results: data.query.search.slice(0, 3).map((item) => ({
-    title: String(item.title).slice(0, 180), summary: plainText(item.snippet).slice(0, 600),
-    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(item.title).replaceAll(" ", "_"))}`,
-  })) };
+  const url = new URL("https://www.bing.com/search");
+  url.search = new URLSearchParams({ q: query.trim(), format: "rss" });
+  const xml = await getWebText(url, context, fetchImpl);
+  if (!/<rss\b/i.test(xml)) throw new Error("Web search returned an unsupported response.");
+  const field = (item, name) => plainText(item.match(new RegExp("<" + name + ">([\\s\\S]*?)</" + name + ">", "i"))?.[1] || "");
+  const results = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 5).map((match) => ({ title: field(match[1], "title").slice(0, 180), summary: field(match[1], "description").slice(0, 600), url: field(match[1], "link") })).filter((item) => { try { publicWebUrl(item.url); return true; } catch { return false; } });
+  return { source: "Bing web search", untrusted: true, results };
 }
 
 async function readWebPage(url, context, fetchImpl) {
-  const approved = approvedWebUrl(url);
+  const approved = publicWebUrl(url);
   const text = plainText(await getWebText(approved, context, fetchImpl));
   return { url: approved.href, untrusted: true, text: text.slice(0, 6000), truncated: text.length > 6000 };
 }
@@ -123,8 +125,8 @@ function reverseImageLink(attachment) {
 const tool = (name, description, properties, required) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false } } });
 const HELPER_TOOLS = Object.freeze([
   tool("calculate", "Evaluate arithmetic with + - * / % and parentheses.", { expression: { type: "string" } }, ["expression"]),
-  tool("search_web", "Search Wikipedia references. Query is sent to Wikipedia; never include private conversation, personal data, or secrets. Not a general news search.", { query: { type: "string" } }, ["query"]),
-  tool("read_web_page", "Read one public HTTPS page on en.wikipedia.org, developer.mozilla.org, docs.discord.com, or support.google.com. No redirects or private sites.", { url: { type: "string" } }, ["url"]),
+  tool("search_web", "Search the web using Bing after the requester approves the exact search URL. Never include private conversation, personal data, or secrets.", { query: { type: "string" } }, ["query"]),
+  tool("read_web_page", "Read one public HTTPS webpage after explicit requester approval. No redirects, private networks, or login sessions.", { url: { type: "string" } }, ["url"]),
   tool("file_metadata", "Inspect Discord metadata of an attachment supplied in the CURRENT request. Does not read embedded EXIF or file bytes.", { attachment_id: { type: "string" } }, ["attachment_id"]),
   tool("reverse_image_search", "Make a Google Lens link for a current image attachment. The user opens it to share the image with Google; no search results are fetched.", { attachment_id: { type: "string" } }, ["attachment_id"]),
 ]);

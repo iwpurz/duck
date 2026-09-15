@@ -21,11 +21,11 @@ test("internet helpers reject private destinations, credentials, lookalike hosts
 });
 
 test("reference search uses bounded, credential-free, redirect-free requests and gives sources", async () => {
-  const result = await executeHelperTool("search_web", { query: "Duck" }, { webEnabled: true, userId: "search-user", guildId: "search-guild" }, async (url, options) => {
-    assert.equal(new URL(url).hostname, "en.wikipedia.org");
+  const result = await executeHelperTool("search_web", { query: "Duck" }, { webEnabled: true, userId: "search-user", guildId: "search-guild", approveWeb: async () => true }, async (url, options) => {
+    assert.equal(new URL(url).hostname, "www.bing.com");
     assert.equal(options.redirect, "error");
     assert.equal(options.headers.Authorization, undefined);
-    return Response.json({ query: { search: [{ title: "Duck", snippet: "<b>Duck</b> is a bird." }] } });
+    return new Response("<rss><channel><item><title>Duck</title><description>Duck is a bird.</description><link>https://en.wikipedia.org/wiki/Duck</link></item></channel></rss>", { headers: { "content-type": "text/xml" } });
   });
   assert.equal(result.untrusted, true);
   assert.equal(result.results[0].summary, "Duck is a bird.");
