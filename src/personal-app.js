@@ -1,3 +1,4 @@
+import { hasRawToolMarkup, TOOL_FORMAT_RETRY, TOOL_FORMAT_ERROR } from "./ai-output.js";
 import { createChatActivity } from "./chat-activity.js";
 import { getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 import { statusPayload } from "./status-emojis.js";
@@ -47,6 +48,7 @@ async function personalAnswer(prompt, preset, context, fetchImpl) {
     ];
     const availableTools = HELPER_TOOLS.filter((tool) => tool.function.name === "calculate" || (context.webEnabled && ["search_web", "read_web_page"].includes(tool.function.name)));
     let toolsSupported = true;
+    let retriedToolFormat = false;
     for (let step = 0; step < 3; step += 1) {
       await context.activity?.update("thinking");
       const response = await fetchWithTimeoutAndRetry(getOpenRouterChatEndpoint(), {
@@ -61,6 +63,15 @@ async function personalAnswer(prompt, preset, context, fetchImpl) {
       const body = JSON.parse(text);
       if (body?.error) throw new Error(`OpenRouter: ${String(body.error.message || "generation failed").slice(0, 220)}`);
       const answer = body?.choices?.[0]?.message;
+      if (hasRawToolMarkup(answer?.content)) {
+        if (answer?.tool_calls?.length) answer.content = null;
+        else {
+          if (retriedToolFormat || step === 2) throw new Error(TOOL_FORMAT_ERROR);
+          retriedToolFormat = true;
+          messages.push({ role: "system", content: TOOL_FORMAT_RETRY });
+          continue;
+        }
+      }
       if (!answer?.tool_calls?.length) {
         if (typeof answer?.content !== "string" || !answer.content.trim()) throw new Error("The AI returned no answer. Try again shortly.");
         return answer.content.trim().slice(0, 1900);

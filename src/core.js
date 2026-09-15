@@ -1,3 +1,4 @@
+import { hasRawToolMarkup, TOOL_FORMAT_RETRY, TOOL_FORMAT_ERROR } from "./ai-output.js";
 import { getOpenRouterChatEndpoint, getOpenRouterChatApiKey, getOpenRouterGatewayHeaders } from "../child/src/openrouter.js";
 import { statusTitle } from "./status-emojis.js";
 import { HELPER_TOOLS, executeHelperTool, VOTE_URL } from "./helper-tools.js";
@@ -3816,6 +3817,7 @@ async function chatWithOpenAiCompatible(message, config, activity = null) {
   const proposedActions = [];
   const maxToolSteps = getAiAgentMaxSteps(message.guildId);
   let toolStep = 0;
+  let retriedToolFormat = false;
 
   async function getNextResponse(allowTools = true) {
     await activity?.update("thinking");
@@ -3867,6 +3869,17 @@ async function chatWithOpenAiCompatible(message, config, activity = null) {
     body = await readBoundedJson(response, 2 * 1024 * 1024);
     choiceMessage = body.choices?.[0]?.message;
     content = extractAiTextContent(choiceMessage);
+    if (hasRawToolMarkup(content)) {
+      if (choiceMessage?.tool_calls?.length) {
+        content = "";
+        choiceMessage.content = null;
+      } else {
+        if (retriedToolFormat) throw new Error(TOOL_FORMAT_ERROR);
+        retriedToolFormat = true;
+        activeMessages.push({ role: "system", content: TOOL_FORMAT_RETRY });
+        return getNextResponse(allowTools);
+      }
+    }
     if ((typeof content === "string" && content.trim()) || choiceMessage?.tool_calls?.length) return;
 
     logWarn("ai.chat.empty-content-retry", {
@@ -4028,6 +4041,7 @@ async function chatWithOllama(message) {
 
   const body = await readBoundedJson(response, 2 * 1024 * 1024);
   const content = extractAiTextContent(body.message);
+  if (hasRawToolMarkup(content)) throw new Error(TOOL_FORMAT_ERROR);
   logDebug("ai.ollama.chat.result", {
     model,
     hasContent: typeof content === "string" && Boolean(content.trim()),
